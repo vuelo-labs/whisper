@@ -125,10 +125,15 @@ async function initIndex() {
 
       let entity = await getEntity(entityId);
       if (!entity) {
+        // New user — create with freshly generated token
         entity = await createEntity({ entityId, ghostName, trustToken });
+        setCurrentEntity({ entityId, ghostName, trustToken });
+      } else {
+        // Returning user — preserve their stored token; never overwrite with undefined
+        const existing = getCurrentEntity();
+        const storedToken = (existing?.entityId === entityId) ? existing?.trustToken : null;
+        setCurrentEntity({ entityId, ghostName, trustToken: storedToken });
       }
-
-      setCurrentEntity({ entityId, ghostName, trustToken: entity.trustToken });
       // New user: no display name yet → onboard first
       window.location.href = entity.displayName ? 'dashboard.html' : 'onboard.html';
     } catch (err) {
@@ -363,7 +368,7 @@ async function initDashboard() {
   // Room open window — visiting dashboard extends it; show status
   const expiry = entity.expiry || '24h';
   const newOpenUntil = roomOpenUntilFromExpiry(expiry);
-  await updateEntity(current.entityId, { roomOpenUntil: newOpenUntil });
+  try { await updateEntity(current.entityId, { roomOpenUntil: newOpenUntil }); } catch {}
 
   const roomStatusEl = document.getElementById('room-status');
   if (roomStatusEl) roomStatusEl.textContent = `open for ${formatRelativeTime(newOpenUntil)}`;
