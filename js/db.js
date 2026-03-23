@@ -157,6 +157,12 @@ export async function isCircleMember(ownerId, memberId) {
   catch { return false; }
 }
 
+export async function getCirclesIn(entityId) {
+  if (!isRemote) return local.getCirclesIn(entityId);
+  try { const { circlesIn } = await get(`/circle/in/${entityId}`, currentToken()); return circlesIn; }
+  catch { return 0; }
+}
+
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 export async function getTokenBalance(entityId) {

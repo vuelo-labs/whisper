@@ -227,6 +227,20 @@ function isCircleMember(ownerId, memberId) {
   return readJSON(KEYS.circle(ownerId), []).includes(memberId);
 }
 
+function getCirclesIn(entityId) {
+  // Count how many circles this entity is a member of
+  // In local mode, scan all circle keys
+  let count = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('whisper_circle_')) {
+      const members = readJSON(key, []);
+      if (members.includes(entityId)) count++;
+    }
+  }
+  return count;
+}
+
 // --- Tokens (local fallback) ---
 
 function getTokenBalance(entityId) {
@@ -275,6 +289,7 @@ export {
   joinCircle,
   getCircleWidth,
   isCircleMember,
+  getCirclesIn,
   getTokenBalance,
   spendToken,
 };

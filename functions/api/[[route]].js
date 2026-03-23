@@ -23,6 +23,8 @@ function uid() {
   return crypto.randomUUID();
 }
 
+const ELLIS_ID = 'e111500000000000000000000000000000000000000000000000000000000000';
+
 // Verify trust token against stored entity — used for owner-only writes
 async function authorize(env, entityId, request) {
   const auth = request.headers.get('Authorization') || '';
@@ -113,6 +115,14 @@ export async function onRequest({ request, env }) {
     const row = await env.DB.prepare(
       'SELECT * FROM entities WHERE entity_id = ?'
     ).bind(entityId).first();
+
+    // Auto-join Ellis into the new entity's circle (gives 1 token/day from day 1)
+    await env.DB.prepare(`
+      INSERT INTO trust_circle (owner_id, member_id)
+      VALUES (?, ?)
+      ON CONFLICT(owner_id, member_id) DO NOTHING
+    `).bind(entityId, ELLIS_ID).run();
+
     return json(remapEntity(row));
   }
 
@@ -296,6 +306,16 @@ export async function onRequest({ request, env }) {
       'SELECT 1 FROM trust_circle WHERE owner_id = ? AND member_id = ?'
     ).bind(parts[1], parts[3]).first();
     return json({ member: !!row });
+  }
+
+  // GET /api/circle/in/:memberId  — how many circles this entity is IN (auth required)
+  if (method === 'GET' && parts[0] === 'circle' && parts[1] === 'in' && parts[2]) {
+    const memberId = parts[2];
+    if (!(await authorize(env, memberId, request))) return err('Unauthorized', 401);
+    const row = await env.DB.prepare(
+      'SELECT COUNT(*) as c FROM trust_circle WHERE member_id = ?'
+    ).bind(memberId).first();
+    return json({ circlesIn: row?.c || 0 });
   }
 
   // ── Tokens ───────────────────────────────────────────────────────────────────

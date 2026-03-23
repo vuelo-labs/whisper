@@ -9,7 +9,7 @@ import {
   getInboard, getOutboard,
   integrateWhisper, releaseWhisper, clearBoard,
   getIntegratedWhispers, isBoardFull,
-  joinCircle, getCircleWidth, isCircleMember, getTokenBalance,
+  joinCircle, getCircleWidth, isCircleMember, getCirclesIn, getTokenBalance,
 } from './db.js';
 
 // Detect current page
@@ -255,23 +255,37 @@ async function initDashboard() {
   if (displayNameEl) displayNameEl.textContent = displayName;
   if (ghostNameEl) ghostNameEl.textContent = entity.ghostName;
 
+  // Load circlesIn first so sigil can reflect it
+  const circlesIn = await getCirclesIn(current.entityId);
+
   if (entity.photoUrl && photoAvatarEl) {
     photoAvatarEl.src = entity.photoUrl;
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    sigilContainer.innerHTML = generateSigil(current.entityId, 80, entity.sigilParams || null);
+    const sigilParams = entity.sigilParams ? { ...entity.sigilParams, circlesIn } : { ...defaultSigilParams(current.entityId), circlesIn };
+    sigilContainer.innerHTML = generateSigilFromParams(sigilParams, 80);
   }
 
-  // Circle width + token balance (load in background)
-  getCircleWidth(current.entityId).then(width => {
-    const el = document.getElementById('circle-width');
-    if (el) el.textContent = `Circle · ${width}`;
-  });
-  getTokenBalance(current.entityId).then(balance => {
-    const el = document.getElementById('token-balance');
-    if (el) el.textContent = `${balance} whisper${balance === 1 ? '' : 's'} today`;
-  });
+  // Circle width + token balance
+  const circleWidth = await getCircleWidth(current.entityId);
+  const tokenBalance = await getTokenBalance(current.entityId);
+
+  const circleWidthEl = document.getElementById('circle-width');
+  if (circleWidthEl) circleWidthEl.textContent = `Circle · ${circleWidth}`;
+
+  const tokenBalanceEl = document.getElementById('token-balance');
+  if (tokenBalanceEl) tokenBalanceEl.textContent = `${tokenBalance} whisper${tokenBalance === 1 ? '' : 's'} today`;
+
+  // Ellis prompt — shown when only Ellis is in the circle
+  const ellisPromptEl = document.getElementById('ellis-prompt');
+  if (ellisPromptEl) {
+    if (circleWidth <= 1) {
+      ellisPromptEl.classList.remove('hidden');
+    } else {
+      ellisPromptEl.classList.add('hidden');
+    }
+  }
 
   // Expiry selector
   const expirySelect = document.getElementById('expiry-select');
@@ -515,7 +529,9 @@ async function initRoom() {
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    sigilContainer.innerHTML = generateSigil(entityId, 72, entity.sigilParams || null);
+    const ownerCirclesIn = await getCirclesIn(entityId);
+    const sigilParams = entity.sigilParams ? { ...entity.sigilParams, circlesIn: ownerCirclesIn } : { ...defaultSigilParams(entityId), circlesIn: ownerCirclesIn };
+    sigilContainer.innerHTML = generateSigilFromParams(sigilParams, 72);
   }
 
   // Trust link: show join circle step if visitor has an entity and isn't already a member
