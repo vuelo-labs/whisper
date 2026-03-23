@@ -48,9 +48,9 @@ async function initIndex() {
       const ghostName = getGhostName(entityId);
       const trustToken = generateTrustToken();
 
-      let entity = getEntity(entityId);
+      let entity = await getEntity(entityId);
       if (!entity) {
-        entity = createEntity({ entityId, ghostName, trustToken });
+        entity = await createEntity({ entityId, ghostName, trustToken });
       }
 
       setCurrentEntity({ entityId, ghostName, trustToken: entity.trustToken });
@@ -74,11 +74,11 @@ const PALETTES = [
   { name: 'Glacial', hue: 205, color: '#5B8FA0' },
 ];
 
-function initOnboard() {
+async function initOnboard() {
   const current = getCurrentEntity();
   if (!current) { window.location.href = 'index.html'; return; }
 
-  const entity = getEntity(current.entityId);
+  const entity = await getEntity(current.entityId);
   if (!entity) { window.location.href = 'index.html'; return; }
   if (entity.displayName) { window.location.href = 'dashboard.html'; return; }
 
@@ -208,7 +208,7 @@ function initOnboard() {
   }
 
   if (form) {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const displayName = nameInput ? nameInput.value.trim() : '';
       if (!displayName) return;
@@ -216,7 +216,7 @@ function initOnboard() {
       const photoUrl = (photoPreview && !photoPreview.classList.contains('hidden'))
         ? photoPreview.src : null;
 
-      setEntityProfile(current.entityId, { displayName, photoUrl, sigilParams: params });
+      await setEntityProfile(current.entityId, { displayName, photoUrl, sigilParams: params });
       setCurrentEntity({ ...current, displayName });
       window.location.href = 'dashboard.html';
     });
@@ -228,14 +228,14 @@ function initOnboard() {
 }
 
 // --- DASHBOARD PAGE ---
-function initDashboard() {
+async function initDashboard() {
   const current = getCurrentEntity();
   if (!current) {
     window.location.href = 'index.html';
     return;
   }
 
-  const entity = getEntity(current.entityId);
+  const entity = await getEntity(current.entityId);
   if (!entity) {
     window.location.href = 'index.html';
     return;
@@ -263,13 +263,13 @@ function initDashboard() {
   const expirySelect = document.getElementById('expiry-select');
   if (expirySelect) {
     expirySelect.value = entity.expiry || '24h';
-    expirySelect.addEventListener('change', () => {
-      updateEntity(current.entityId, { expiry: expirySelect.value });
+    expirySelect.addEventListener('change', async () => {
+      await updateEntity(current.entityId, { expiry: expirySelect.value });
     });
   }
 
   // Note count
-  renderNoteCount(current.entityId, entity);
+  await renderNoteCount(current.entityId, entity);
 
   // Share buttons
   const shareBtn = document.getElementById('share-btn');
@@ -316,33 +316,33 @@ function initDashboard() {
   // Clear board
   const clearBtn = document.getElementById('clear-board-btn');
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', async () => {
       if (confirm('Clear all integrated whispers from your board? They will be released.')) {
-        clearBoard(current.entityId);
-        renderInboard(current.entityId);
-        renderNoteCount(current.entityId, getEntity(current.entityId));
+        await clearBoard(current.entityId);
+        await renderInboard(current.entityId);
+        await renderNoteCount(current.entityId, await getEntity(current.entityId));
       }
     });
   }
 
   // Render inboard
-  renderInboard(current.entityId);
-  renderOutboard(current.entityId);
+  await renderInboard(current.entityId);
+  await renderOutboard(current.entityId);
 }
 
-function renderNoteCount(entityId, entity) {
+async function renderNoteCount(entityId, entity) {
   const countEl = document.getElementById('note-count');
   if (!countEl) return;
-  const inboard = getInboard(entityId);
+  const inboard = await getInboard(entityId);
   const active = inboard.filter(w => w.status === 'antechamber' || w.status === 'integrated').length;
   countEl.textContent = `${active} / 100`;
 }
 
-function renderInboard(entityId) {
+async function renderInboard(entityId) {
   const container = document.getElementById('inboard-container');
   if (!container) return;
 
-  const inboard = getInboard(entityId);
+  const inboard = await getInboard(entityId);
   const antechamber = inboard.filter(w => w.status === 'antechamber');
   const integrated = inboard.filter(w => w.status === 'integrated');
 
@@ -424,34 +424,34 @@ function handleUnveil(whisperId, entityId) {
   });
 }
 
-function handleIntegrate(whisperId, entityId) {
+async function handleIntegrate(whisperId, entityId) {
   const card = document.getElementById(`whisper-${whisperId}`);
-  integrateWhisper(entityId, whisperId);
+  await integrateWhisper(entityId, whisperId);
   if (card) card.classList.add('dissolving');
-  setTimeout(() => {
-    renderInboard(entityId);
-    renderNoteCount(entityId, getEntity(entityId));
+  setTimeout(async () => {
+    await renderInboard(entityId);
+    await renderNoteCount(entityId, await getEntity(entityId));
   }, 1300);
 }
 
-function handleRelease(whisperId, entityId) {
+async function handleRelease(whisperId, entityId) {
   const card = document.getElementById(`whisper-${whisperId}`);
-  releaseWhisper(entityId, whisperId);
+  await releaseWhisper(entityId, whisperId);
   if (card) {
     card.classList.add('dissolving');
     showAnchorOverlay('You have heard them. You do not have to carry it.');
   }
-  setTimeout(() => {
-    renderInboard(entityId);
-    renderNoteCount(entityId, getEntity(entityId));
+  setTimeout(async () => {
+    await renderInboard(entityId);
+    await renderNoteCount(entityId, await getEntity(entityId));
   }, 1300);
 }
 
-function renderOutboard(entityId) {
+async function renderOutboard(entityId) {
   const container = document.getElementById('outboard-container');
   if (!container) return;
 
-  const outboard = getOutboard(entityId);
+  const outboard = await getOutboard(entityId);
   if (outboard.length === 0) {
     container.innerHTML = `<div class="text-center py-16 text-muted">
       <p class="text-lg font-serif italic">You haven't spoken into the void yet.</p>
@@ -472,7 +472,7 @@ function renderOutboard(entityId) {
 }
 
 // --- ROOM PAGE ---
-function initRoom() {
+async function initRoom() {
   const params = new URLSearchParams(window.location.search);
   const entityId = params.get('id');
   const trustParam = params.get('trust');
@@ -482,7 +482,7 @@ function initRoom() {
     return;
   }
 
-  const entity = getEntity(entityId);
+  const entity = await getEntity(entityId);
   if (!entity) {
     document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center text-muted font-serif italic text-xl">This room has not yet been opened.</div>`;
     return;
@@ -505,7 +505,7 @@ function initRoom() {
   }
 
   // Board full check
-  const full = isBoardFull(entityId);
+  const full = await isBoardFull(entityId);
   const leaveBtn = document.getElementById('leave-whisper-btn');
   const fullMsg = document.getElementById('board-full-msg');
 
@@ -525,7 +525,7 @@ function initRoom() {
   // Render integrated whispers
   const whispersList = document.getElementById('whispers-list');
   const emptyState = document.getElementById('empty-state');
-  const integrated = getIntegratedWhispers(entityId);
+  const integrated = await getIntegratedWhispers(entityId);
 
   if (integrated.length === 0) {
     if (emptyState) emptyState.classList.remove('hidden');
@@ -543,7 +543,7 @@ function initRoom() {
 }
 
 // --- COMPOSE PAGE ---
-function initCompose() {
+async function initCompose() {
   const params = new URLSearchParams(window.location.search);
   const recipientId = params.get('id');
   const trustParam = params.get('trust');
@@ -553,7 +553,7 @@ function initCompose() {
     return;
   }
 
-  const recipient = getEntity(recipientId);
+  const recipient = await getEntity(recipientId);
   if (!recipient) {
     document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center text-muted font-serif italic text-xl">This room does not exist.</div>`;
     return;
@@ -590,7 +590,7 @@ function initCompose() {
   }
 
   // Rate limit check
-  const rateCheck = checkRateLimit(senderId);
+  const rateCheck = await checkRateLimit(senderId);
   const rateLimitMsg = document.getElementById('rate-limit-msg');
   const liturgyContainer = document.getElementById('liturgy-container');
 
@@ -853,7 +853,7 @@ function initCompose() {
       const text = whisperTextarea ? whisperTextarea.value.trim() : '';
       if (!text) return;
 
-      const whisper = addWhisper({
+      await addWhisper({
         recipientId,
         senderId,
         senderGhost,
@@ -863,7 +863,7 @@ function initCompose() {
         wish: phaseData.wish,
       });
 
-      logOutbound({
+      await logOutbound({
         senderId,
         senderGhost,
         recipientId,
@@ -872,7 +872,7 @@ function initCompose() {
         status: 'sent',
       });
 
-      incrementRateLimit(senderId);
+      await incrementRateLimit(senderId);
 
       showFinalMessage(
         'It has been received.',
@@ -882,11 +882,11 @@ function initCompose() {
   }
 
   if (voidBtn) {
-    voidBtn.addEventListener('click', () => {
+    voidBtn.addEventListener('click', async () => {
       const text = whisperTextarea ? whisperTextarea.value.trim() : '';
       if (!text) return;
 
-      logOutbound({
+      await logOutbound({
         senderId,
         senderGhost,
         recipientId,
@@ -895,7 +895,7 @@ function initCompose() {
         status: 'void',
       });
 
-      incrementRateLimit(senderId);
+      await incrementRateLimit(senderId);
 
       const whisperPhase = document.getElementById('phase-whisper');
       if (whisperPhase) whisperPhase.classList.add('dissolving');
