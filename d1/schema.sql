@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS token_ledger (
 CREATE INDEX IF NOT EXISTS idx_whispers_recipient ON whispers(recipient_id, status);
 CREATE INDEX IF NOT EXISTS idx_whispers_sender    ON whispers(sender_id);
 CREATE INDEX IF NOT EXISTS idx_outbound_sender    ON outbound_log(sender_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_trust_circle_owner ON trust_circle(owner_id);
+CREATE INDEX IF NOT EXISTS idx_trust_circle_owner  ON trust_circle(owner_id);
+CREATE INDEX IF NOT EXISTS idx_trust_circle_member ON trust_circle(member_id);
 
 -- Circle requests: someone found a trust link and asked to join
 -- name = what they said their name is (display only, not verified)

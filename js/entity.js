@@ -14,7 +14,7 @@ async function hashEmail(email) {
 const ADJECTIVES = [
   'Saffron','Velvet','Ember','Silver','Moss','Ashen','Quiet','Hollow','Amber','Sage',
   'Lunar','Fern','Tidal','Ivory','Dusk','Haze','Muted','Glacial','Lichen','Onyx',
-  'Cobalt','Briar','Willow','Cinder','Flint','Wren','Slate','Pale','Thistle','Murk'
+  'Cobalt','Briar','Willow','Cinder','Flint','Still','Slate','Pale','Thistle','Murk'
 ];
 
 const NOUNS = [

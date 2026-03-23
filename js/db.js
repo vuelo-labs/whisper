@@ -128,7 +128,7 @@ export async function isBoardFull(entityId) {
 
 export async function logOutbound({ senderId, senderGhost, recipientId, recipientGhost, text, status = 'sent' }) {
   if (!isRemote) return local.logOutbound({ senderId, senderGhost, recipientId, recipientGhost, text, status });
-  return post('/outboard', { senderId, recipientId, recipientGhost, text, status });
+  return post('/outboard', { senderId, recipientId, recipientGhost, text, status }, currentToken());
 }
 
 export async function getOutboard(entityId) {

@@ -5,7 +5,6 @@ const KEYS = {
   ENTITIES: 'whisper_entities',
   inboard: (id) => `whisper_inboard_${id}`,
   outboard: (id) => `whisper_outboard_${id}`,
-  rateLimit: (id) => `whisper_ratelimit_${id}`,
   circle: (id) => `whisper_circle_${id}`,
   tokens: (id) => `whisper_tokens_${id}`,
 };
@@ -193,31 +192,6 @@ function getIntegratedWhispers(entityId) {
   return inboard.filter(w => w.status === 'integrated');
 }
 
-// --- Rate limiting ---
-
-function getRateLimit(senderId) {
-  const data = readJSON(KEYS.rateLimit(senderId), { sends: [] });
-  // Clean up entries older than 30 days
-  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  data.sends = (data.sends || []).filter(ts => ts > cutoff);
-  writeJSON(KEYS.rateLimit(senderId), data);
-  return data;
-}
-
-function incrementRateLimit(senderId) {
-  const data = getRateLimit(senderId);
-  data.sends.push(Date.now());
-  writeJSON(KEYS.rateLimit(senderId), data);
-}
-
-function checkRateLimit(senderId) {
-  const data = getRateLimit(senderId);
-  return {
-    count: data.sends.length,
-    exceeded: data.sends.length >= 3,
-  };
-}
-
 // Board capacity check (100 notes max)
 function isBoardFull(entityId) {
   const inboard = readJSON(KEYS.inboard(entityId), []);
@@ -374,9 +348,6 @@ export {
   releaseWhisper,
   clearBoard,
   getIntegratedWhispers,
-  getRateLimit,
-  incrementRateLimit,
-  checkRateLimit,
   isBoardFull,
   joinCircle,
   getCircleWidth,

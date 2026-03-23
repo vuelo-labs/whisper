@@ -107,6 +107,8 @@ export async function onRequest({ request, env }) {
   if (method === 'POST' && parts[0] === 'entity') {
     const { entityId, ghostName, trustToken } = body;
     if (!entityId || !ghostName || !trustToken) return err('Missing fields');
+    if (!/^[0-9a-f]{64}$/.test(entityId)) return err('Invalid entityId');
+    if (!/^[0-9a-f]{16}$/.test(trustToken)) return err('Invalid trustToken');
     await env.DB.prepare(`
       INSERT INTO entities (entity_id, ghost_name, trust_token)
       VALUES (?, ?, ?)
@@ -209,14 +211,12 @@ export async function onRequest({ request, env }) {
     `).bind(recipientId).first();
     if ((count?.c || 0) >= 100) return err('Board is full', 409);
 
-    // Accrue and check token balance
-    const balance = await accrueTokens(env, senderId);
-    if (balance < 1) return err('No tokens', 402);
-
-    // Spend 1 token
-    await env.DB.prepare(
-      'UPDATE token_ledger SET balance = balance - 1 WHERE entity_id = ?'
+    // Accrue daily tokens, then atomically spend 1 (guards against race conditions)
+    await accrueTokens(env, senderId);
+    const spent = await env.DB.prepare(
+      'UPDATE token_ledger SET balance = balance - 1 WHERE entity_id = ? AND balance > 0'
     ).bind(senderId).run();
+    if (!spent.meta.changes) return err('No tokens', 402);
 
     const id = uid();
     await env.DB.prepare(`
@@ -236,9 +236,10 @@ export async function onRequest({ request, env }) {
     if (!['integrated','released'].includes(status)) return err('Invalid status');
     if (!(await authorize(env, recipientId, request))) return err('Unauthorized', 401);
 
-    await env.DB.prepare(
+    const updated = await env.DB.prepare(
       'UPDATE whispers SET status = ? WHERE id = ? AND recipient_id = ?'
     ).bind(status, whisperId, recipientId).run();
+    if (!updated.meta.changes) return err('Whisper not found', 404);
     return json({ ok: true });
   }
 
@@ -249,6 +250,13 @@ export async function onRequest({ request, env }) {
     await env.DB.prepare(
       "UPDATE whispers SET status = 'released' WHERE recipient_id = ? AND status = 'integrated'"
     ).bind(recipientId).run();
+    // Sync noteCount to remaining antechamber whispers only
+    const remaining = await env.DB.prepare(
+      "SELECT COUNT(*) as c FROM whispers WHERE recipient_id = ? AND status = 'antechamber'"
+    ).bind(recipientId).first();
+    await env.DB.prepare(
+      'UPDATE entities SET note_count = ? WHERE entity_id = ?'
+    ).bind(remaining?.c || 0, recipientId).run();
     return json({ ok: true });
   }
 
@@ -277,6 +285,7 @@ export async function onRequest({ request, env }) {
   if (method === 'POST' && parts[0] === 'outboard') {
     const { senderId, recipientId, recipientGhost, text, status } = body;
     if (!senderId || !recipientId || !text) return err('Missing fields');
+    if (!(await authorize(env, senderId, request))) return err('Unauthorized', 401);
     const id = uid();
     await env.DB.prepare(`
       INSERT INTO outbound_log (id, sender_id, recipient_id, recipient_ghost, text, status)
@@ -287,12 +296,13 @@ export async function onRequest({ request, env }) {
 
   // ── Trust Circle ─────────────────────────────────────────────────────────────
 
-  // POST /api/circle/:ownerId/join  — join an owner's circle (requires sender auth)
+  // POST /api/circle/:ownerId/join  — join an owner's circle (requires member auth)
   if (method === 'POST' && parts[0] === 'circle' && parts[2] === 'join') {
     const ownerId  = parts[1];
     const { memberId } = body;
     if (!memberId) return err('Missing memberId');
     if (memberId === ownerId) return err('Cannot join your own circle');
+    if (!(await authorize(env, memberId, request))) return err('Unauthorized', 401);
 
     // Ensure member entity exists
     const member = await env.DB.prepare(
@@ -488,7 +498,7 @@ function remapEntity(r) {
     ghostName:                r.ghost_name,
     displayName:              r.display_name              || null,
     photoUrl:                 r.photo_url                 || null,
-    sigilParams:              r.sigil_params              ? JSON.parse(r.sigil_params) : null,
+    sigilParams:              r.sigil_params              ? (() => { try { return JSON.parse(r.sigil_params); } catch { return null; } })() : null,
     trustToken:               r.trust_token,
     circleQuestion:           r.circle_question           || null,
     circleQuestionExpiresAt:  r.circle_question_expires_at || null,

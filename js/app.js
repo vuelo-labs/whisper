@@ -22,7 +22,7 @@ const ELLIS_THINGS = [
   "When have you seen me at my best?",
   "What's a quality in me that you think I underestimate?",
   "What's something I seem to carry alone that I don't have to?",
-  "What do you wish I asked more of you?",
+  "Is there a version of me you see that I don't show enough?",
   "What would you like me to know about how I make you feel?",
   "What's something I could let go of?",
   "What's something you've wanted to tell me but haven't?",
@@ -40,7 +40,7 @@ const ELLIS_PUSHES = [
   "What are you waiting for permission to say to me?",
   "Where do you think I'm fooling myself?",
   "What's something I've been avoiding that others can see clearly?",
-  "What do you think I secretly know but won't admit?",
+  "What do you think I'm afraid to want?",
 ];
 
 function getEllisMessages(entityId) {
@@ -597,8 +597,8 @@ async function renderInboard(entityId) {
           <p class="text-xs text-muted mt-3">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}</p>
         </div>
         <div class="mt-4 flex gap-3 items-center">
-          <button class="unveil-btn btn-ghost text-sm" data-id="${w.id}">Unveil</button>
-          <button class="integrate-btn btn-sage text-sm hidden" data-id="${w.id}" data-recipient="${entityId}">Integrate</button>
+          <button class="unveil-btn btn-ghost text-sm" data-id="${w.id}">Open</button>
+          <button class="integrate-btn btn-sage text-sm hidden" data-id="${w.id}" data-recipient="${entityId}">Carry</button>
           <button class="release-btn btn-muted text-sm hidden" data-id="${w.id}" data-recipient="${entityId}">Release</button>
         </div>
       </div>`;
@@ -608,7 +608,7 @@ async function renderInboard(entityId) {
 
   if (integrated.length > 0) {
     html += `<div>
-      <h3 class="text-xs uppercase tracking-widest text-muted mb-4">Integrated — ${integrated.length} carried</h3>
+      <h3 class="text-xs uppercase tracking-widest text-muted mb-4">Carried — ${integrated.length}</h3>
       <div class="space-y-3">`;
     integrated.forEach(w => {
       html += `<div class="whisper-card bg-surface rounded-2xl p-5">
@@ -966,7 +966,7 @@ async function initCompose() {
   const balance = await getTokenBalance(senderId);
   if (balance < 1) {
     if (noTokenMsg) {
-      noTokenMsg.innerHTML = `<p class="font-serif italic text-muted text-base leading-relaxed">You have no whispers left today. Your circle will replenish them tomorrow.</p>`;
+      noTokenMsg.innerHTML = `<p class="font-serif italic text-muted text-base leading-relaxed">You have no whispers left today. Return at midnight — your circle will refill your voice.</p>`;
       noTokenMsg.classList.remove('hidden');
     }
     if (liturgyContainer) liturgyContainer.classList.add('hidden');
@@ -1246,8 +1246,8 @@ async function initCompose() {
       });
 
       showFinalMessage(
-        'It has been received.',
-        'Whether they are ready for it is theirs to decide.'
+        'That was brave.',
+        'It has landed quietly. Whether they are ready for it is theirs to decide.'
       );
     });
   }
