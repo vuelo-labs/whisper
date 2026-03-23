@@ -60,6 +60,30 @@
       <p class="text-muted text-sm font-light">has opened their quiet room</p>
     </header>
 
+    <!-- Join circle (shown only on trust links for non-members) -->
+    <div id="join-circle-section" class="hidden mb-8">
+      <div class="bg-surface rounded-2xl p-6 text-center space-y-4" style="border: 1px solid rgba(201,168,76,0.1);">
+        <p class="font-serif text-text text-base leading-relaxed">
+          You've been invited into a circle of trust.
+        </p>
+        <p class="text-muted text-sm font-light leading-relaxed">
+          Stepping in is permanent. You won't be visible to anyone — only the circle's width will grow.
+        </p>
+        <button
+          id="join-circle-btn"
+          class="px-8 py-3 rounded-2xl text-sm font-sans tracking-widest uppercase transition-all"
+          style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);"
+          onmouseover="this.style.background='rgba(201,168,76,0.16)'"
+          onmouseout="this.style.background='rgba(201,168,76,0.08)'"
+        >
+          Step in
+        </button>
+        <p id="join-circle-done" class="hidden text-muted text-sm font-light italic">
+          You are in the circle now.
+        </p>
+      </div>
+    </div>
+
     <!-- Board full message -->
     <div id="board-full-msg" class="hidden mb-8 text-center">
       <div class="bg-surface rounded-2xl p-6 border border-surface">

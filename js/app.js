@@ -8,7 +8,8 @@ import {
   addWhisper, logOutbound,
   getInboard, getOutboard,
   integrateWhisper, releaseWhisper, clearBoard,
-  getIntegratedWhispers, checkRateLimit, incrementRateLimit, isBoardFull,
+  getIntegratedWhispers, isBoardFull,
+  joinCircle, getCircleWidth, isCircleMember, getTokenBalance,
 } from './db.js';
 
 // Detect current page
@@ -262,6 +263,16 @@ async function initDashboard() {
     sigilContainer.innerHTML = generateSigil(current.entityId, 80, entity.sigilParams || null);
   }
 
+  // Circle width + token balance (load in background)
+  getCircleWidth(current.entityId).then(width => {
+    const el = document.getElementById('circle-width');
+    if (el) el.textContent = `Circle · ${width}`;
+  });
+  getTokenBalance(current.entityId).then(balance => {
+    const el = document.getElementById('token-balance');
+    if (el) el.textContent = `${balance} whisper${balance === 1 ? '' : 's'} today`;
+  });
+
   // Expiry selector
   const expirySelect = document.getElementById('expiry-select');
   if (expirySelect) {
@@ -507,6 +518,30 @@ async function initRoom() {
     sigilContainer.innerHTML = generateSigil(entityId, 72, entity.sigilParams || null);
   }
 
+  // Trust link: show join circle step if visitor has an entity and isn't already a member
+  const isTrustLink = trustParam && trustParam === entity.trustToken;
+  const joinSection = document.getElementById('join-circle-section');
+  const joinBtn = document.getElementById('join-circle-btn');
+  const joinDone = document.getElementById('join-circle-done');
+
+  if (isTrustLink && joinSection) {
+    const visitor = getCurrentEntity();
+    if (visitor && visitor.entityId !== entityId) {
+      const alreadyMember = await isCircleMember(entityId, visitor.entityId);
+      if (!alreadyMember) {
+        joinSection.classList.remove('hidden');
+        if (joinBtn) {
+          joinBtn.addEventListener('click', async () => {
+            joinBtn.disabled = true;
+            await joinCircle(entityId, visitor.entityId);
+            if (joinBtn) joinBtn.classList.add('hidden');
+            if (joinDone) joinDone.classList.remove('hidden');
+          });
+        }
+      }
+    }
+  }
+
   // Board full check
   const full = await isBoardFull(entityId);
   const leaveBtn = document.getElementById('leave-whisper-btn');
@@ -519,7 +554,7 @@ async function initRoom() {
     if (leaveBtn) {
       leaveBtn.addEventListener('click', () => {
         let url = `compose.html?id=${entityId}`;
-        if (trustParam && trustParam === entity.trustToken) url += `&trust=${trustParam}`;
+        if (isTrustLink) url += `&trust=${trustParam}`;
         window.location.href = url;
       });
     }
@@ -578,27 +613,30 @@ async function initCompose() {
     recipientSigilEl.innerHTML = generateSigil(recipientId, 48, recipient.sigilParams || null);
   }
 
-  // Get or create sender entity
-  let senderEntity = getCurrentEntity();
-  let senderId, senderGhost;
-
-  if (senderEntity) {
-    senderId = senderEntity.entityId;
-    senderGhost = senderEntity.ghostName;
-  } else {
-    // Anonymous sender — create ephemeral identity
-    const anonHash = generateTrustToken() + generateTrustToken();
-    senderId = anonHash;
-    senderGhost = getGhostName(anonHash);
-  }
-
-  // Rate limit check
-  const rateCheck = await checkRateLimit(senderId);
-  const rateLimitMsg = document.getElementById('rate-limit-msg');
+  // Sender must have an entity to send
+  const senderEntity = getCurrentEntity();
+  const noTokenMsg = document.getElementById('rate-limit-msg');
   const liturgyContainer = document.getElementById('liturgy-container');
 
-  if (rateCheck.exceeded) {
-    if (rateLimitMsg) rateLimitMsg.classList.remove('hidden');
+  if (!senderEntity) {
+    if (noTokenMsg) {
+      noTokenMsg.innerHTML = `<p class="font-serif italic text-muted text-base leading-relaxed">You need your own quiet room before you can leave a whisper.</p><a href="/" class="text-sage text-sm mt-3 inline-block hover:underline">Open your room →</a>`;
+      noTokenMsg.classList.remove('hidden');
+    }
+    if (liturgyContainer) liturgyContainer.classList.add('hidden');
+    return;
+  }
+
+  const senderId   = senderEntity.entityId;
+  const senderGhost = senderEntity.ghostName;
+
+  // Token check
+  const balance = await getTokenBalance(senderId);
+  if (balance < 1) {
+    if (noTokenMsg) {
+      noTokenMsg.innerHTML = `<p class="font-serif italic text-muted text-base leading-relaxed">You have no whispers left today. Your circle will replenish them tomorrow.</p>`;
+      noTokenMsg.classList.remove('hidden');
+    }
     if (liturgyContainer) liturgyContainer.classList.add('hidden');
     return;
   }
@@ -875,8 +913,6 @@ async function initCompose() {
         status: 'sent',
       });
 
-      await incrementRateLimit(senderId);
-
       showFinalMessage(
         'It has been received.',
         'Whether they are ready for it is theirs to decide.'
@@ -897,8 +933,6 @@ async function initCompose() {
         text,
         status: 'void',
       });
-
-      await incrementRateLimit(senderId);
 
       const whisperPhase = document.getElementById('phase-whisper');
       if (whisperPhase) whisperPhase.classList.add('dissolving');
