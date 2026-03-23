@@ -347,8 +347,9 @@ function getTokenBalance(entityId) {
   const allMembers = readJSON(KEYS.circle(entityId), []);
   const realCircleSize = allMembers.filter(id => id !== ELLIS_ID).length;
 
-  const toAdd = realCircleSize === 0 ? 1 : Math.min(realCircleSize, 5);
-  const maxBalance = realCircleSize === 0 ? 1 : 5;
+  // Testing mode: 1000/day flat
+  const toAdd = 1000;
+  const maxBalance = 1000;
   const newBalance = Math.min((ledger.balance || 0) + toAdd, maxBalance);
   writeJSON(KEYS.tokens(entityId), { balance: newBalance, accrued_date: today });
   return newBalance;

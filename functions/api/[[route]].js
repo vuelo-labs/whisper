@@ -65,10 +65,9 @@ async function accrueTokens(env, entityId) {
   ).bind(entityId, ELLIS_ID).first();
   const realCircleSize = circleRow?.c || 0;
 
-  // Without real people: 1 whisper/day, max 1
-  // With real people: up to circleSize/day, max 5
-  const toAdd = realCircleSize === 0 ? 1 : Math.min(realCircleSize, 5);
-  const maxBalance = realCircleSize === 0 ? 1 : 5;
+  // Testing mode: 1000/day flat
+  const toAdd = 1000;
+  const maxBalance = 1000;
   const newBalance = Math.min((ledger.balance || 0) + toAdd, maxBalance);
 
   await env.DB.prepare(`
