@@ -60,26 +60,73 @@
       <p class="text-muted text-sm font-light">has opened their quiet room</p>
     </header>
 
-    <!-- Join circle (shown only on trust links for non-members) -->
+    <!-- Circle request (shown only on trust links for non-members) -->
     <div id="join-circle-section" class="hidden mb-8">
-      <div class="bg-surface rounded-2xl p-6 text-center space-y-4" style="border: 1px solid rgba(201,168,76,0.1);">
-        <p class="font-serif text-text text-base leading-relaxed">
+      <div class="bg-surface rounded-2xl p-6" style="border: 1px solid rgba(201,168,76,0.1);">
+        <p class="font-serif text-text text-base leading-relaxed mb-1">
           You've been invited into a circle of trust.
         </p>
-        <p class="text-muted text-sm font-light leading-relaxed">
-          Stepping in is permanent. You won't be visible to anyone — only the circle's width will grow.
+        <p class="text-muted text-sm font-light leading-relaxed mb-5">
+          They'll need to approve you. Tell them who you are.
         </p>
+
+        <div id="join-circle-form" class="space-y-3">
+          <input
+            id="join-name"
+            type="text"
+            placeholder="Your name"
+            maxlength="80"
+            class="w-full bg-bg rounded-xl px-4 py-3 text-sm font-sans text-text placeholder-muted/40 outline-none"
+            style="border: 1px solid rgba(201,168,76,0.15);"
+          />
+          <input
+            id="join-email"
+            type="email"
+            placeholder="Your email"
+            class="w-full bg-bg rounded-xl px-4 py-3 text-sm font-sans text-text placeholder-muted/40 outline-none"
+            style="border: 1px solid rgba(201,168,76,0.15);"
+          />
+          <p class="text-muted/40 text-xs font-light">Your email is hashed locally and never sent — it's just a key.</p>
+          <button
+            id="join-circle-btn"
+            class="w-full py-3 rounded-xl text-sm font-sans tracking-wide transition-all"
+            style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);"
+            onmouseover="this.style.background='rgba(201,168,76,0.16)'"
+            onmouseout="this.style.background='rgba(201,168,76,0.08)'"
+          >
+            Send request
+          </button>
+        </div>
+
+        <p id="join-circle-done" class="hidden text-muted text-sm font-light italic text-center py-2">
+          Your request has been sent. They'll decide.
+        </p>
+        <p id="join-circle-already" class="hidden text-muted text-sm font-light italic text-center py-2">
+          You are already in this circle.
+        </p>
+      </div>
+    </div>
+
+    <!-- Circle question -->
+    <div id="circle-question-section" class="hidden mb-8">
+      <div class="rounded-2xl p-6 text-center" style="background: rgba(138,154,91,0.04); border: 1px solid rgba(138,154,91,0.1);">
+        <p class="text-xs uppercase tracking-widest text-muted mb-3">They're asking</p>
+        <p id="circle-question-display" class="font-serif text-text text-lg leading-relaxed italic mb-5"></p>
         <button
-          id="join-circle-btn"
-          class="px-8 py-3 rounded-2xl text-sm font-sans tracking-widest uppercase transition-all"
-          style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);"
-          onmouseover="this.style.background='rgba(201,168,76,0.16)'"
-          onmouseout="this.style.background='rgba(201,168,76,0.08)'"
-        >
-          Step in
-        </button>
-        <p id="join-circle-done" class="hidden text-muted text-sm font-light italic">
-          You are in the circle now.
+          id="answer-question-btn"
+          class="px-8 py-3 rounded-2xl text-sm font-sans tracking-wide transition-all"
+          style="background: rgba(138,154,91,0.08); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+          onmouseover="this.style.background='rgba(138,154,91,0.16)'"
+          onmouseout="this.style.background='rgba(138,154,91,0.08)'"
+        >Answer this</button>
+      </div>
+    </div>
+
+    <!-- Room resting message (shown when room_open_until has passed) -->
+    <div id="room-resting-msg" class="hidden mb-8 text-center">
+      <div class="bg-surface rounded-2xl p-6 border border-surface">
+        <p class="font-serif text-muted italic text-base leading-relaxed">
+          This room is resting. It will open again when its owner returns.
         </p>
       </div>
     </div>

@@ -163,6 +163,40 @@ export async function getCirclesIn(entityId) {
   catch { return 0; }
 }
 
+// ── Invite Links ──────────────────────────────────────────────────────────────
+
+export async function createInviteLink(ownerId) {
+  if (!isRemote) return local.createInviteLink(ownerId);
+  try { return await post('/invite', { ownerId }, currentToken()); }
+  catch { return null; }
+}
+
+export async function useInviteLink(inviteId, { name, requesterId }) {
+  if (!isRemote) return local.useInviteLink(inviteId, { name, requesterId });
+  try { return await post(`/invite/${inviteId}`, { name, requesterId }); }
+  catch { return { status: 'invalid' }; }
+}
+
+// ── Circle Requests ───────────────────────────────────────────────────────────
+
+export async function addCircleRequest(ownerId, { name, requesterId }) {
+  if (!isRemote) return local.addCircleRequest(ownerId, { name, requesterId });
+  try { return await post(`/circle/${ownerId}/request`, { name, requesterId }); }
+  catch { return { ok: false }; }
+}
+
+export async function getCircleRequests(ownerId) {
+  if (!isRemote) return local.getCircleRequests(ownerId);
+  try { const { requests } = await get(`/circle/${ownerId}/requests`, currentToken()); return requests || []; }
+  catch { return []; }
+}
+
+export async function resolveCircleRequest(ownerId, requestId, action) {
+  if (!isRemote) return local.resolveCircleRequest(ownerId, requestId, action);
+  try { return await patch(`/circle/${ownerId}/requests/${requestId}`, { action }, currentToken()); }
+  catch { return { ok: false }; }
+}
+
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 export async function getTokenBalance(entityId) {

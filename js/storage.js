@@ -40,6 +40,9 @@ function createEntity({ entityId, ghostName, trustToken }) {
     displayName: null,
     photoUrl: null,
     sigilParams: null,
+    circleQuestion: null,
+    circleQuestionExpiresAt: null,
+    roomOpenUntil: null,
     expiry: '24h',
     noteCount: 0,
     createdAt: new Date().toISOString(),
@@ -131,7 +134,22 @@ function logOutbound({ senderId, senderGhost, recipientId, recipientGhost, text,
 }
 
 function getInboard(entityId) {
-  return readJSON(KEYS.inboard(entityId), []);
+  const inboard = readJSON(KEYS.inboard(entityId), []);
+  const entity  = getEntity(entityId);
+  const expiry  = entity?.expiry || '24h';
+  const msMap   = { '1h': 3600000, '24h': 86400000, '7d': 604800000 };
+  const ms      = msMap[expiry] || 86400000;
+  const cutoff  = Date.now() - ms;
+  let drifted   = false;
+  const updated = inboard.map(w => {
+    if (w.status === 'antechamber' && new Date(w.createdAt).getTime() < cutoff) {
+      drifted = true;
+      return { ...w, status: 'released' };
+    }
+    return w;
+  });
+  if (drifted) writeJSON(KEYS.inboard(entityId), updated);
+  return updated;
 }
 
 function getOutboard(entityId) {
@@ -241,6 +259,75 @@ function getCirclesIn(entityId) {
   return count;
 }
 
+// --- Invite Links (local fallback) ---
+
+function createInviteLink(ownerId) {
+  const invites = readJSON('whisper_invites', {});
+  const id = generateId();
+  invites[id] = { id, ownerId, usedBy: null, usedAt: null, createdAt: new Date().toISOString() };
+  writeJSON('whisper_invites', invites);
+  return { id };
+}
+
+function useInviteLink(inviteId, { name, requesterId }) {
+  const invites = readJSON('whisper_invites', {});
+  const invite = invites[inviteId];
+  if (!invite) return { status: 'invalid' };
+  if (requesterId === invite.ownerId) return { status: 'self' };
+
+  const circle = readJSON(KEYS.circle(invite.ownerId), []);
+  if (circle.includes(requesterId)) return { status: 'member' };
+
+  if (!invite.usedBy) {
+    // First use — auto-accept
+    invite.usedBy = requesterId;
+    invite.usedAt = new Date().toISOString();
+    writeJSON('whisper_invites', invites);
+    joinCircle(invite.ownerId, requesterId);
+    return { status: 'joined' };
+  }
+
+  // Already used — create approval request
+  addCircleRequest(invite.ownerId, { name, requesterId });
+  return { status: 'pending' };
+}
+
+// --- Circle Requests (local fallback) ---
+
+function addCircleRequest(ownerId, { name, requesterId }) {
+  if (requesterId === ownerId) return { ok: false };
+  const circle = readJSON(KEYS.circle(ownerId), []);
+  if (circle.includes(requesterId)) return { ok: true, status: 'member' };
+
+  const key = `whisper_crequests_${ownerId}`;
+  const requests = readJSON(key, []);
+  const existing = requests.find(r => r.requesterId === requesterId);
+  if (existing) {
+    existing.name = name;
+    existing.status = 'pending';
+  } else {
+    requests.push({ id: generateId(), ownerId, requesterId, name, status: 'pending', createdAt: new Date().toISOString() });
+  }
+  writeJSON(key, requests);
+  return { ok: true, status: 'pending' };
+}
+
+function getCircleRequests(ownerId) {
+  const key = `whisper_crequests_${ownerId}`;
+  return readJSON(key, []).filter(r => r.status === 'pending');
+}
+
+function resolveCircleRequest(ownerId, requestId, action) {
+  const key = `whisper_crequests_${ownerId}`;
+  const requests = readJSON(key, []);
+  const req = requests.find(r => r.id === requestId);
+  if (!req) return { ok: false };
+  req.status = action === 'approve' ? 'approved' : 'declined';
+  writeJSON(key, requests);
+  if (action === 'approve') joinCircle(ownerId, req.requesterId);
+  return { ok: true };
+}
+
 // --- Tokens (local fallback) ---
 
 function getTokenBalance(entityId) {
@@ -267,6 +354,11 @@ function spendToken(entityId) {
 
 export {
   KEYS,
+  createInviteLink,
+  useInviteLink,
+  addCircleRequest,
+  getCircleRequests,
+  resolveCircleRequest,
   createEntity,
   setEntityProfile,
   getEntity,

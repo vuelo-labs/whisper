@@ -133,10 +133,13 @@ export async function onRequest({ request, env }) {
 
     const fields = [];
     const vals   = [];
-    if (body.displayName !== undefined) { fields.push('display_name = ?');  vals.push(body.displayName); }
-    if (body.photoUrl    !== undefined) { fields.push('photo_url = ?');     vals.push(body.photoUrl); }
-    if (body.sigilParams !== undefined) { fields.push('sigil_params = ?');  vals.push(JSON.stringify(body.sigilParams)); }
-    if (body.expiry      !== undefined) { fields.push('expiry = ?');        vals.push(body.expiry); }
+    if (body.displayName              !== undefined) { fields.push('display_name = ?');               vals.push(body.displayName); }
+    if (body.photoUrl                 !== undefined) { fields.push('photo_url = ?');                  vals.push(body.photoUrl); }
+    if (body.sigilParams              !== undefined) { fields.push('sigil_params = ?');               vals.push(JSON.stringify(body.sigilParams)); }
+    if (body.expiry                   !== undefined) { fields.push('expiry = ?');                     vals.push(body.expiry); }
+    if (body.circleQuestion           !== undefined) { fields.push('circle_question = ?');            vals.push(body.circleQuestion || null); }
+    if (body.circleQuestionExpiresAt  !== undefined) { fields.push('circle_question_expires_at = ?'); vals.push(body.circleQuestionExpiresAt || null); }
+    if (body.roomOpenUntil            !== undefined) { fields.push('room_open_until = ?');            vals.push(body.roomOpenUntil || null); }
     if (!fields.length) return err('Nothing to update');
 
     fields.push('updated_at = ?');
@@ -156,9 +159,24 @@ export async function onRequest({ request, env }) {
   // ── Whispers ─────────────────────────────────────────────────────────────────
 
   // GET /api/whispers/:recipientId  — inboard (auth required)
+  // Auto-releases antechamber whispers older than the entity's expiry before returning.
   if (method === 'GET' && parts[0] === 'whispers' && parts[1] && !parts[2]) {
     const recipientId = parts[1];
     if (!(await authorize(env, recipientId, request))) return err('Unauthorized', 401);
+
+    // Drift old antechamber whispers based on entity expiry setting
+    const entityRow = await env.DB.prepare(
+      'SELECT expiry FROM entities WHERE entity_id = ?'
+    ).bind(recipientId).first();
+    const expiry = entityRow?.expiry || '24h';
+    const intervalMap = { '1h': '-1 hours', '24h': '-24 hours', '7d': '-7 days' };
+    const interval = intervalMap[expiry] || '-24 hours';
+    await env.DB.prepare(`
+      UPDATE whispers SET status = 'released'
+      WHERE recipient_id = ? AND status = 'antechamber'
+      AND created_at < datetime('now', ?)
+    `).bind(recipientId, interval).run();
+
     const { results } = await env.DB.prepare(`
       SELECT * FROM whispers
       WHERE recipient_id = ? AND status IN ('antechamber','integrated')
@@ -318,6 +336,137 @@ export async function onRequest({ request, env }) {
     return json({ circlesIn: row?.c || 0 });
   }
 
+  // ── Invite Links ─────────────────────────────────────────────────────────────
+
+  // POST /api/invite  — create a one-time invite link (owner-only)
+  if (method === 'POST' && parts[0] === 'invite' && !parts[1]) {
+    const { ownerId } = body;
+    if (!ownerId) return err('Missing ownerId');
+    if (!(await authorize(env, ownerId, request))) return err('Unauthorized', 401);
+    const id = uid();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      'INSERT INTO invite_links (id, owner_id, expires_at) VALUES (?, ?, ?)'
+    ).bind(id, ownerId, expiresAt).run();
+    return json({ id }, 201);
+  }
+
+  // POST /api/invite/:id  — use an invite link
+  // Auto-accepts if first use; falls back to circle_request if already used
+  if (method === 'POST' && parts[0] === 'invite' && parts[1] && !parts[2]) {
+    const inviteId = parts[1];
+    const { name, requesterId } = body;
+    if (!name || !requesterId) return err('Missing name or requesterId');
+
+    const invite = await env.DB.prepare(
+      'SELECT * FROM invite_links WHERE id = ?'
+    ).bind(inviteId).first();
+    if (!invite) return err('Invite not found', 404);
+    if (invite.expires_at && invite.expires_at < new Date().toISOString()) {
+      return json({ status: 'expired' });
+    }
+
+    const ownerId = invite.owner_id;
+    if (requesterId === ownerId) return json({ status: 'self' });
+
+    // Already in circle?
+    const already = await env.DB.prepare(
+      'SELECT 1 FROM trust_circle WHERE owner_id = ? AND member_id = ?'
+    ).bind(ownerId, requesterId).first();
+    if (already) return json({ status: 'member' });
+
+    if (!invite.used_by) {
+      // First use — auto-accept
+      await env.DB.prepare(
+        'UPDATE invite_links SET used_by = ?, used_at = datetime("now") WHERE id = ?'
+      ).bind(requesterId, inviteId).run();
+      await env.DB.prepare(`
+        INSERT INTO trust_circle (owner_id, member_id)
+        VALUES (?, ?)
+        ON CONFLICT(owner_id, member_id) DO NOTHING
+      `).bind(ownerId, requesterId).run();
+      return json({ status: 'joined' });
+    }
+
+    // Already used — create an approval request
+    const id = uid();
+    await env.DB.prepare(`
+      INSERT INTO circle_requests (id, owner_id, requester_id, name, status)
+      VALUES (?, ?, ?, ?, 'pending')
+      ON CONFLICT(owner_id, requester_id) DO UPDATE SET name = excluded.name, status = 'pending'
+    `).bind(id, ownerId, requesterId, name.trim().slice(0, 80)).run();
+    return json({ status: 'pending' });
+  }
+
+  // ── Circle Requests ──────────────────────────────────────────────────────────
+
+  // POST /api/circle/:ownerId/request  — ask to join (public, no auth)
+  if (method === 'POST' && parts[0] === 'circle' && parts[2] === 'request') {
+    const ownerId = parts[1];
+    const { name, requesterId } = body;
+    if (!name || !requesterId) return err('Missing name or requesterId');
+    if (requesterId === ownerId) return err('Cannot request your own circle');
+
+    const owner = await env.DB.prepare(
+      'SELECT entity_id FROM entities WHERE entity_id = ?'
+    ).bind(ownerId).first();
+    if (!owner) return err('Circle not found', 404);
+
+    // Already a member?
+    const already = await env.DB.prepare(
+      'SELECT 1 FROM trust_circle WHERE owner_id = ? AND member_id = ?'
+    ).bind(ownerId, requesterId).first();
+    if (already) return json({ ok: true, status: 'member' });
+
+    const id = uid();
+    await env.DB.prepare(`
+      INSERT INTO circle_requests (id, owner_id, requester_id, name, status)
+      VALUES (?, ?, ?, ?, 'pending')
+      ON CONFLICT(owner_id, requester_id) DO UPDATE SET name = excluded.name, status = 'pending'
+    `).bind(id, ownerId, requesterId, name.trim().slice(0, 80)).run();
+    return json({ ok: true, status: 'pending' }, 201);
+  }
+
+  // GET /api/circle/:ownerId/requests  — pending requests (owner-only)
+  if (method === 'GET' && parts[0] === 'circle' && parts[2] === 'requests') {
+    const ownerId = parts[1];
+    if (!(await authorize(env, ownerId, request))) return err('Unauthorized', 401);
+    const { results } = await env.DB.prepare(`
+      SELECT id, name, requester_id, created_at
+      FROM circle_requests WHERE owner_id = ? AND status = 'pending'
+      ORDER BY created_at ASC
+    `).bind(ownerId).all();
+    return json({ requests: results || [] });
+  }
+
+  // PATCH /api/circle/:ownerId/requests/:requestId  — approve or decline (owner-only)
+  if (method === 'PATCH' && parts[0] === 'circle' && parts[2] === 'requests' && parts[3]) {
+    const ownerId   = parts[1];
+    const requestId = parts[3];
+    const { action } = body; // 'approve' | 'decline'
+    if (!action) return err('Missing action');
+    if (!(await authorize(env, ownerId, request))) return err('Unauthorized', 401);
+
+    const req = await env.DB.prepare(
+      'SELECT * FROM circle_requests WHERE id = ? AND owner_id = ?'
+    ).bind(requestId, ownerId).first();
+    if (!req) return err('Request not found', 404);
+
+    await env.DB.prepare(
+      'UPDATE circle_requests SET status = ? WHERE id = ?'
+    ).bind(action === 'approve' ? 'approved' : 'declined', requestId).run();
+
+    if (action === 'approve') {
+      await env.DB.prepare(`
+        INSERT INTO trust_circle (owner_id, member_id)
+        VALUES (?, ?)
+        ON CONFLICT(owner_id, member_id) DO NOTHING
+      `).bind(ownerId, req.requester_id).run();
+    }
+
+    return json({ ok: true });
+  }
+
   // ── Tokens ───────────────────────────────────────────────────────────────────
 
   // GET /api/tokens/:entityId  — get balance (accrues if needed, auth required)
@@ -335,15 +484,18 @@ export async function onRequest({ request, env }) {
 
 function remapEntity(r) {
   return {
-    entityId:    r.entity_id,
-    ghostName:   r.ghost_name,
-    displayName: r.display_name  || null,
-    photoUrl:    r.photo_url     || null,
-    sigilParams: r.sigil_params  ? JSON.parse(r.sigil_params) : null,
-    trustToken:  r.trust_token,
-    expiry:      r.expiry,
-    noteCount:   r.note_count,
-    createdAt:   r.created_at,
+    entityId:                 r.entity_id,
+    ghostName:                r.ghost_name,
+    displayName:              r.display_name              || null,
+    photoUrl:                 r.photo_url                 || null,
+    sigilParams:              r.sigil_params              ? JSON.parse(r.sigil_params) : null,
+    trustToken:               r.trust_token,
+    circleQuestion:           r.circle_question           || null,
+    circleQuestionExpiresAt:  r.circle_question_expires_at || null,
+    roomOpenUntil:            r.room_open_until            || null,
+    expiry:                   r.expiry,
+    noteCount:                r.note_count,
+    createdAt:                r.created_at,
   };
 }
 

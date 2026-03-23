@@ -75,15 +75,18 @@
       <!-- Board settings -->
       <div class="flex items-center gap-4 flex-wrap">
         <div class="flex items-center gap-3 bg-surface rounded-2xl px-4 py-2.5">
-          <label for="expiry-select" class="text-muted text-xs tracking-wide">link expires</label>
+          <label for="expiry-select" class="text-muted text-xs tracking-wide">open for</label>
           <select
             id="expiry-select"
             class="bg-transparent text-text text-sm font-sans border-none outline-none cursor-pointer"
           >
-            <option value="1h">after 1 hour</option>
-            <option value="24h" selected>after 24 hours</option>
-            <option value="7d">after 7 days</option>
+            <option value="1h">1 hour</option>
+            <option value="24h" selected>24 hours</option>
+            <option value="7d">7 days</option>
           </select>
+        </div>
+        <div class="flex items-center gap-2 bg-surface rounded-2xl px-4 py-2.5">
+          <span id="room-status" class="text-muted text-xs font-light">—</span>
         </div>
 
         <div class="flex items-center gap-2 bg-surface rounded-2xl px-4 py-2.5">
@@ -92,7 +95,7 @@
         </div>
 
         <div class="flex items-center gap-2 bg-surface rounded-2xl px-4 py-2.5">
-          <span id="circle-width" class="text-muted text-xs font-light">Circle · —</span>
+          <span id="circle-width" class="text-muted text-xs font-light">In — circles</span>
         </div>
 
         <div class="flex items-center gap-2 bg-surface rounded-2xl px-4 py-2.5">
@@ -120,18 +123,78 @@
         onmouseover="this.style.background='rgba(201,168,76,0.16)'"
         onmouseout="this.style.background='rgba(201,168,76,0.08)'"
       >
-        Generate trust link
+        Generate invite link
       </button>
     </div>
 
     <!-- Copy feedback -->
     <p id="copy-feedback" class="hidden text-muted text-xs text-center mb-4 font-light italic"></p>
 
-    <!-- Ellis prompt -->
-    <div id="ellis-prompt" class="hidden mb-6 px-5 py-4 rounded-2xl text-center" style="background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.08);">
+    <!-- Ellis prompt (shown when circle is just Ellis) -->
+    <div id="ellis-prompt" class="hidden mb-4 px-5 py-3 rounded-2xl text-center" style="background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.08);">
       <p class="text-muted text-sm font-light font-serif italic leading-relaxed">
         Your circle is just Ellis right now.<br>Share your trust link with someone who matters.
       </p>
+    </div>
+
+    <!-- Ellis actions — always available -->
+    <div class="flex gap-3 mb-6">
+      <button
+        id="ellis-thing-btn"
+        class="px-4 py-2 rounded-xl text-xs font-sans tracking-wide transition-all"
+        style="background: rgba(201,168,76,0.06); color: rgba(201,168,76,0.8); border: 1px solid rgba(201,168,76,0.15);"
+        onmouseover="this.style.background='rgba(201,168,76,0.14)'"
+        onmouseout="this.style.background='rgba(201,168,76,0.06)'"
+      >Ask something gentle</button>
+      <button
+        id="ellis-push-btn"
+        class="px-4 py-2 rounded-xl text-xs font-sans tracking-wide transition-all"
+        style="background: rgba(201,168,76,0.04); color: rgba(201,168,76,0.6); border: 1px solid rgba(201,168,76,0.1);"
+        onmouseover="this.style.background='rgba(201,168,76,0.1)'"
+        onmouseout="this.style.background='rgba(201,168,76,0.04)'"
+      >Ask something brave</button>
+    </div>
+
+    <!-- Ask your circle -->
+    <div class="mb-6">
+      <div id="circle-question-active" class="hidden mb-3 px-4 py-3 rounded-xl" style="background: rgba(138,154,91,0.04); border: 1px solid rgba(138,154,91,0.12);">
+        <div class="flex items-start justify-between gap-3">
+          <p id="circle-question-text" class="font-serif italic text-text text-sm leading-relaxed flex-1"></p>
+          <span id="circle-question-expiry-hint" class="text-xs text-muted/50 shrink-0 font-light"></span>
+        </div>
+        <button id="circle-question-clear" class="text-xs text-muted/40 hover:text-muted mt-2 transition-colors">close question</button>
+      </div>
+      <div id="circle-question-form" class="flex gap-2">
+        <input
+          id="circle-question-input"
+          type="text"
+          placeholder="Ask your circle something…"
+          maxlength="200"
+          class="flex-1 bg-surface rounded-xl px-4 py-2.5 text-sm font-sans text-text placeholder-muted/40 outline-none"
+          style="border: 1px solid rgba(138,154,91,0.1);"
+        />
+        <select
+          id="circle-question-duration"
+          class="bg-surface text-muted text-xs font-sans rounded-xl px-3 py-2.5 outline-none cursor-pointer"
+          style="border: 1px solid rgba(138,154,91,0.1);"
+        >
+          <option value="24h">24h</option>
+          <option value="7d" selected>7 days</option>
+        </select>
+        <button
+          id="circle-question-btn"
+          class="px-4 py-2.5 rounded-xl text-xs font-sans tracking-wide transition-all"
+          style="background: rgba(138,154,91,0.08); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+          onmouseover="this.style.background='rgba(138,154,91,0.16)'"
+          onmouseout="this.style.background='rgba(138,154,91,0.08)'"
+        >Ask</button>
+      </div>
+    </div>
+
+    <!-- Circle requests -->
+    <div id="circle-requests-section" class="hidden mb-6">
+      <h3 class="text-xs uppercase tracking-widest text-muted mb-3">Wants to join your circle</h3>
+      <div id="circle-requests-container" class="space-y-2"></div>
     </div>
 
     <!-- Tabs -->

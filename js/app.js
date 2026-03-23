@@ -10,7 +10,102 @@ import {
   integrateWhisper, releaseWhisper, clearBoard,
   getIntegratedWhispers, isBoardFull,
   joinCircle, getCircleWidth, isCircleMember, getCirclesIn, getTokenBalance,
+  createInviteLink, useInviteLink,
+  addCircleRequest, getCircleRequests, resolveCircleRequest,
 } from './db.js';
+
+const ELLIS_ID = 'e111500000000000000000000000000000000000000000000000000000000000';
+
+// Ellis prompts — suggestions for what to invite others to whisper about
+const ELLIS_THINGS = [
+  "What's something I do well that I might take for granted?",
+  "When have you seen me at my best?",
+  "What's a quality in me that you think I underestimate?",
+  "What's something I seem to carry alone that I don't have to?",
+  "What do you wish I asked more of you?",
+  "What would you like me to know about how I make you feel?",
+  "What's something I could let go of?",
+  "What's something you've wanted to tell me but haven't?",
+  "Where do you think I am holding myself back?",
+  "What's something I do that makes you feel good?",
+];
+
+const ELLIS_PUSHES = [
+  "What's something about me you think I need to hear?",
+  "What would you say to me if you knew I wouldn't get defensive?",
+  "What's the gap between how I see myself and how you see me?",
+  "What's a pattern in me you've noticed that I probably haven't?",
+  "What do I do that makes things harder than they need to be?",
+  "What's the one thing you'd change about how I show up?",
+  "What are you waiting for permission to say to me?",
+  "Where do you think I'm fooling myself?",
+  "What's something I've been avoiding that others can see clearly?",
+  "What do you think I secretly know but won't admit?",
+];
+
+function getEllisMessages(entityId) {
+  try { return JSON.parse(localStorage.getItem(`whisper_ellis_${entityId}`)) || []; } catch { return []; }
+}
+
+function saveEllisMessages(entityId, messages) {
+  localStorage.setItem(`whisper_ellis_${entityId}`, JSON.stringify(messages));
+}
+
+function createEllisMessage(entityId, type) {
+  const pool = type === 'thing' ? ELLIS_THINGS : ELLIS_PUSHES;
+  const text = pool[Math.floor(Math.random() * pool.length)];
+  const messages = getEllisMessages(entityId);
+  const msg = { id: crypto.randomUUID(), type, text, createdAt: new Date().toISOString(), shared: false };
+  messages.unshift(msg);
+  saveEllisMessages(entityId, messages);
+  return msg;
+}
+
+function dismissEllisMessage(entityId, msgId) {
+  const messages = getEllisMessages(entityId).filter(m => m.id !== msgId);
+  saveEllisMessages(entityId, messages);
+}
+
+// Timer helpers
+function expiryToMs(expiry) {
+  if (expiry === '1h')  return 3600000;
+  if (expiry === '24h') return 86400000;
+  if (expiry === '7d')  return 7 * 86400000;
+  return 86400000;
+}
+
+function roomOpenUntilFromExpiry(expiry) {
+  return new Date(Date.now() + expiryToMs(expiry)).toISOString();
+}
+
+function isRoomOpen(entity) {
+  if (!entity.roomOpenUntil) return false;
+  return new Date(entity.roomOpenUntil) > new Date();
+}
+
+function isQuestionActive(entity) {
+  if (!entity.circleQuestion) return false;
+  if (!entity.circleQuestionExpiresAt) return true;
+  return new Date(entity.circleQuestionExpiresAt) > new Date();
+}
+
+function formatRelativeTime(isoString) {
+  const ms = new Date(isoString) - Date.now();
+  if (ms <= 0) return 'now';
+  const h = Math.floor(ms / 3600000);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `${d}d`;
+  if (h > 0) return `${h}h`;
+  const m = Math.floor(ms / 60000);
+  return `${m}m`;
+}
+
+function driftTime(createdAt, expiry) {
+  const driftAt = new Date(new Date(createdAt).getTime() + expiryToMs(expiry));
+  const ms = driftAt - Date.now();
+  if (ms <= 0) return 'drifting…';
+  return `drifts in ${formatRelativeTime(driftAt.toISOString())}`;
+}
 
 // Detect current page
 const page = (() => {
@@ -255,7 +350,6 @@ async function initDashboard() {
   if (displayNameEl) displayNameEl.textContent = displayName;
   if (ghostNameEl) ghostNameEl.textContent = entity.ghostName;
 
-  // Load circlesIn first so sigil can reflect it
   const circlesIn = await getCirclesIn(current.entityId);
 
   if (entity.photoUrl && photoAvatarEl) {
@@ -263,7 +357,7 @@ async function initDashboard() {
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    const sigilParams = entity.sigilParams ? { ...entity.sigilParams, circlesIn } : { ...defaultSigilParams(current.entityId), circlesIn };
+    const sigilParams = entity.sigilParams || defaultSigilParams(current.entityId);
     sigilContainer.innerHTML = generateSigilFromParams(sigilParams, 80);
   }
 
@@ -272,7 +366,7 @@ async function initDashboard() {
   const tokenBalance = await getTokenBalance(current.entityId);
 
   const circleWidthEl = document.getElementById('circle-width');
-  if (circleWidthEl) circleWidthEl.textContent = `Circle · ${circleWidth}`;
+  if (circleWidthEl) circleWidthEl.textContent = `In ${circlesIn} circle${circlesIn === 1 ? '' : 's'}`;
 
   const tokenBalanceEl = document.getElementById('token-balance');
   if (tokenBalanceEl) tokenBalanceEl.textContent = `${tokenBalance} whisper${tokenBalance === 1 ? '' : 's'} today`;
@@ -287,12 +381,23 @@ async function initDashboard() {
     }
   }
 
-  // Expiry selector
+  // Room open window — visiting dashboard extends it; show status
+  const expiry = entity.expiry || '24h';
+  const newOpenUntil = roomOpenUntilFromExpiry(expiry);
+  await updateEntity(current.entityId, { roomOpenUntil: newOpenUntil });
+
+  const roomStatusEl = document.getElementById('room-status');
+  if (roomStatusEl) roomStatusEl.textContent = `open for ${formatRelativeTime(newOpenUntil)}`;
+
+  // Expiry selector — also resets the open window
   const expirySelect = document.getElementById('expiry-select');
   if (expirySelect) {
-    expirySelect.value = entity.expiry || '24h';
+    expirySelect.value = expiry;
     expirySelect.addEventListener('change', async () => {
-      await updateEntity(current.entityId, { expiry: expirySelect.value });
+      const newExpiry = expirySelect.value;
+      const until = roomOpenUntilFromExpiry(newExpiry);
+      await updateEntity(current.entityId, { expiry: newExpiry, roomOpenUntil: until });
+      if (roomStatusEl) roomStatusEl.textContent = `open for ${formatRelativeTime(until)}`;
     });
   }
 
@@ -311,9 +416,15 @@ async function initDashboard() {
   }
 
   if (trustBtn) {
-    trustBtn.addEventListener('click', () => {
-      const url = `${baseUrl}room.html?id=${current.entityId}&trust=${entity.trustToken}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, `Copied: ${url}`));
+    trustBtn.addEventListener('click', async () => {
+      trustBtn.disabled = true;
+      trustBtn.textContent = 'Generating…';
+      const invite = await createInviteLink(current.entityId);
+      trustBtn.disabled = false;
+      trustBtn.textContent = 'Generate invite link';
+      if (!invite?.id) { showCopyFeedback(copyFeedback, 'Could not create link.'); return; }
+      const url = `${baseUrl}room.html?id=${current.entityId}&invite=${invite.id}`;
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Invite link copied. First to open it joins automatically.'));
     });
   }
 
@@ -340,6 +451,69 @@ async function initDashboard() {
   if (tabInboard) tabInboard.addEventListener('click', () => switchTab('inboard'));
   if (tabOutboard) tabOutboard.addEventListener('click', () => switchTab('outboard'));
 
+  // Circle question
+  const questionInput   = document.getElementById('circle-question-input');
+  const questionBtn     = document.getElementById('circle-question-btn');
+  const questionActive  = document.getElementById('circle-question-active');
+  const questionText    = document.getElementById('circle-question-text');
+  const questionClear   = document.getElementById('circle-question-clear');
+  const questionForm    = document.getElementById('circle-question-form');
+
+  function renderCircleQuestion(q, expiresAt) {
+    if (q && isQuestionActive({ circleQuestion: q, circleQuestionExpiresAt: expiresAt })) {
+      if (questionText) questionText.textContent = `"${q}"`;
+      const expiryHint = document.getElementById('circle-question-expiry-hint');
+      if (expiryHint && expiresAt) expiryHint.textContent = `closes in ${formatRelativeTime(expiresAt)}`;
+      if (questionActive) questionActive.classList.remove('hidden');
+      if (questionForm) questionForm.classList.add('hidden');
+    } else {
+      if (questionActive) questionActive.classList.add('hidden');
+      if (questionForm) questionForm.classList.remove('hidden');
+    }
+  }
+
+  renderCircleQuestion(entity.circleQuestion, entity.circleQuestionExpiresAt);
+
+  if (questionBtn) {
+    questionBtn.addEventListener('click', async () => {
+      const q = (questionInput?.value || '').trim();
+      if (!q) return;
+      const durationEl = document.getElementById('circle-question-duration');
+      const durationMs = expiryToMs(durationEl?.value || '24h');
+      const expiresAt  = new Date(Date.now() + durationMs).toISOString();
+      await updateEntity(current.entityId, { circleQuestion: q, circleQuestionExpiresAt: expiresAt });
+      renderCircleQuestion(q, expiresAt);
+    });
+  }
+  if (questionInput) {
+    questionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') questionBtn?.click();
+    });
+  }
+  if (questionClear) {
+    questionClear.addEventListener('click', async () => {
+      await updateEntity(current.entityId, { circleQuestion: null, circleQuestionExpiresAt: null });
+      if (questionInput) questionInput.value = '';
+      renderCircleQuestion(null, null);
+    });
+  }
+
+  // Ellis buttons
+  const ellisThingBtn = document.getElementById('ellis-thing-btn');
+  const ellisPushBtn = document.getElementById('ellis-push-btn');
+  if (ellisThingBtn) {
+    ellisThingBtn.addEventListener('click', async () => {
+      createEllisMessage(current.entityId, 'thing');
+      await renderInboard(current.entityId);
+    });
+  }
+  if (ellisPushBtn) {
+    ellisPushBtn.addEventListener('click', async () => {
+      createEllisMessage(current.entityId, 'push');
+      await renderInboard(current.entityId);
+    });
+  }
+
   // Clear board
   const clearBtn = document.getElementById('clear-board-btn');
   if (clearBtn) {
@@ -356,6 +530,7 @@ async function initDashboard() {
   await renderNoteCount(current.entityId);
   await renderInboard(current.entityId);
   await renderOutboard(current.entityId);
+  await renderCircleRequests(current.entityId);
 }
 
 async function renderNoteCount(entityId) {
@@ -370,17 +545,37 @@ async function renderInboard(entityId) {
   const container = document.getElementById('inboard-container');
   if (!container) return;
 
-  const inboard = await getInboard(entityId);
+  const [inboard, entityData] = await Promise.all([getInboard(entityId), getEntity(entityId)]);
+  const entityExpiry = entityData?.expiry || '24h';
   const antechamber = inboard.filter(w => w.status === 'antechamber');
   const integrated = inboard.filter(w => w.status === 'integrated');
+  const ellisMessages = getEllisMessages(entityId);
 
   let html = '';
 
-  if (antechamber.length === 0 && integrated.length === 0) {
+  if (antechamber.length === 0 && integrated.length === 0 && ellisMessages.length === 0) {
     html = `<div class="text-center py-16 text-muted">
       <p class="text-lg font-serif italic">Silence hangs here, waiting to be filled.</p>
       <p class="text-sm mt-2">Share your room and let the whispers find you.</p>
     </div>`;
+  }
+
+  // Ellis prompts — suggested questions to invite from others
+  if (ellisMessages.length > 0) {
+    html += `<div class="mb-8">
+      <h3 class="text-xs uppercase tracking-widest mb-4" style="color: rgba(201,168,76,0.5);">Ellis suggests asking</h3>
+      <div class="space-y-3">`;
+    ellisMessages.forEach(m => {
+      html += `<div class="rounded-2xl p-5" id="ellis-${m.id}" style="background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.08);">
+        <p class="font-serif text-text text-base leading-relaxed italic">"${escapeHtml(m.text)}"</p>
+        <p class="text-xs mt-2" style="color: rgba(201,168,76,0.45);">— Ellis</p>
+        <div class="mt-4 flex gap-3 items-center">
+          <button class="ellis-copy-btn text-xs tracking-wide transition-colors" style="color: rgba(201,168,76,0.8);" data-id="${m.id}" data-text="${escapeHtml(m.text)}">Copy to share</button>
+          <button class="ellis-dismiss-btn text-xs text-muted/50 hover:text-muted transition-colors" data-id="${m.id}">Pass</button>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
   }
 
   if (antechamber.length > 0) {
@@ -388,10 +583,14 @@ async function renderInboard(entityId) {
       <h3 class="text-xs uppercase tracking-widest text-muted mb-4">Antechamber — ${antechamber.length} waiting</h3>
       <div class="space-y-3">`;
     antechamber.forEach(w => {
+      const drift = driftTime(w.createdAt, entityExpiry);
       html += `<div class="fog-card bg-surface rounded-2xl p-5 relative" id="whisper-${w.id}">
         <div class="fog-overlay absolute inset-0 rounded-2xl"></div>
         <div class="fog-content">
-          <p class="font-serif text-text/40 italic text-base">A whisper waits in the quiet…</p>
+          <div class="flex items-center justify-between">
+            <p class="font-serif text-text/40 italic text-base">A whisper waits in the quiet…</p>
+            <span class="text-xs text-muted/40 font-light ml-3 shrink-0">${drift}</span>
+          </div>
         </div>
         <div class="revealed-content hidden">
           <p class="font-serif text-text text-base leading-relaxed">"${escapeHtml(w.text)}"</p>
@@ -433,6 +632,24 @@ async function renderInboard(entityId) {
 
   container.querySelectorAll('.release-btn').forEach(btn => {
     btn.addEventListener('click', () => handleRelease(btn.dataset.id, entityId));
+  });
+
+  // Ellis buttons
+  container.querySelectorAll('.ellis-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      dismissEllisMessage(entityId, btn.dataset.id);
+      await renderInboard(entityId);
+    });
+  });
+
+  container.querySelectorAll('.ellis-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      copyToClipboard(btn.dataset.text, () => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      });
+    });
   });
 }
 
@@ -499,6 +716,52 @@ async function renderOutboard(entityId) {
       </div>`).join('') + `</div>`;
 }
 
+async function renderCircleRequests(entityId) {
+  const section   = document.getElementById('circle-requests-section');
+  const container = document.getElementById('circle-requests-container');
+  if (!section || !container) return;
+
+  const requests = await getCircleRequests(entityId);
+  if (requests.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  container.innerHTML = requests.map(r => `
+    <div class="flex items-center justify-between bg-surface rounded-xl px-4 py-3" id="req-${r.id}">
+      <span class="text-sm font-light text-text">${escapeHtml(r.name || r.requester_id?.slice(0, 8))}</span>
+      <div class="flex gap-2">
+        <button class="req-approve-btn text-xs px-3 py-1 rounded-lg transition-colors" style="color: #8A9A5B; border: 1px solid rgba(138,154,91,0.3);" data-id="${r.id}">Let in</button>
+        <button class="req-decline-btn text-xs px-3 py-1 rounded-lg text-muted/60 transition-colors hover:text-muted" data-id="${r.id}">Decline</button>
+      </div>
+    </div>`).join('');
+
+  container.querySelectorAll('.req-approve-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await resolveCircleRequest(entityId, btn.dataset.id, 'approve');
+      await renderCircleRequests(entityId);
+      // Refresh circle stats
+      const cw = await getCircleWidth(entityId);
+      const ci = await getCirclesIn(entityId);
+      const el = document.getElementById('circle-width');
+      if (el) el.textContent = `In ${ci} circle${ci === 1 ? '' : 's'}`;
+      const ellisEl = document.getElementById('ellis-prompt');
+      if (ellisEl) {
+        if (cw <= 1) ellisEl.classList.remove('hidden');
+        else ellisEl.classList.add('hidden');
+      }
+    });
+  });
+
+  container.querySelectorAll('.req-decline-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await resolveCircleRequest(entityId, btn.dataset.id, 'decline');
+      await renderCircleRequests(entityId);
+    });
+  });
+}
+
 // --- ROOM PAGE ---
 async function initRoom() {
   const params = new URLSearchParams(window.location.search);
@@ -529,50 +792,93 @@ async function initRoom() {
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    const ownerCirclesIn = await getCirclesIn(entityId);
-    const sigilParams = entity.sigilParams ? { ...entity.sigilParams, circlesIn: ownerCirclesIn } : { ...defaultSigilParams(entityId), circlesIn: ownerCirclesIn };
+    const sigilParams = entity.sigilParams || defaultSigilParams(entityId);
     sigilContainer.innerHTML = generateSigilFromParams(sigilParams, 72);
   }
 
-  // Trust link: show join circle step if visitor has an entity and isn't already a member
-  const isTrustLink = trustParam && trustParam === entity.trustToken;
-  const joinSection = document.getElementById('join-circle-section');
-  const joinBtn = document.getElementById('join-circle-btn');
-  const joinDone = document.getElementById('join-circle-done');
+  // Invite link flow
+  const inviteParam = params.get('invite');
+  const joinSection  = document.getElementById('join-circle-section');
+  const joinBtn      = document.getElementById('join-circle-btn');
+  const joinDone     = document.getElementById('join-circle-done');
+  const joinAlready  = document.getElementById('join-circle-already');
+  const joinForm     = document.getElementById('join-circle-form');
 
-  if (isTrustLink && joinSection) {
+  if (inviteParam && joinSection) {
+    // Self-invite guard (client-side)
     const visitor = getCurrentEntity();
-    if (visitor && visitor.entityId !== entityId) {
-      const alreadyMember = await isCircleMember(entityId, visitor.entityId);
-      if (!alreadyMember) {
-        joinSection.classList.remove('hidden');
-        if (joinBtn) {
-          joinBtn.addEventListener('click', async () => {
-            joinBtn.disabled = true;
-            await joinCircle(entityId, visitor.entityId);
-            if (joinBtn) joinBtn.classList.add('hidden');
-            if (joinDone) joinDone.classList.remove('hidden');
-          });
-        }
+    if (visitor && visitor.entityId === entityId) {
+      // Owner visiting their own room via invite link — hide the form silently
+    } else {
+      joinSection.classList.remove('hidden');
+      if (joinBtn) {
+        joinBtn.addEventListener('click', async () => {
+          const nameEl  = document.getElementById('join-name');
+          const emailEl = document.getElementById('join-email');
+          const name  = (nameEl?.value || '').trim();
+          const email = (emailEl?.value || '').trim();
+          if (!name || !email) { alert('Please enter your name and email.'); return; }
+
+          joinBtn.disabled = true;
+          joinBtn.textContent = 'Joining…';
+
+          const requesterId = await hashEmail(email);
+          const result = await useInviteLink(inviteParam, { name, requesterId });
+
+          if (joinForm) joinForm.classList.add('hidden');
+          if (result?.status === 'self') {
+            // Server-side catch — they hashed the owner's email
+            if (joinAlready) { joinAlready.textContent = 'This is your own circle.'; joinAlready.classList.remove('hidden'); }
+          } else if (result?.status === 'member') {
+            if (joinAlready) joinAlready.classList.remove('hidden');
+          } else if (result?.status === 'joined') {
+            if (joinDone) { joinDone.textContent = 'You\'re in. They\'ll be able to whisper to you soon.'; joinDone.classList.remove('hidden'); }
+          } else {
+            // 'pending' or 'invalid' — link was already used, request queued
+            if (joinDone) { joinDone.textContent = 'This link was already used. Your request has been sent for approval.'; joinDone.classList.remove('hidden'); }
+          }
+        });
       }
     }
   }
 
-  // Board full check
-  const full = await isBoardFull(entityId);
+  // Room open/closed state
+  const roomOpen = isRoomOpen(entity);
+  const leaveBtn2 = document.getElementById('leave-whisper-btn');
+  const roomRestingEl = document.getElementById('room-resting-msg');
+  if (!roomOpen) {
+    if (leaveBtn2) leaveBtn2.classList.add('hidden');
+    if (roomRestingEl) roomRestingEl.classList.remove('hidden');
+  }
+
+  // Circle question (check expiry)
+  const questionSection = document.getElementById('circle-question-section');
+  const questionDisplay = document.getElementById('circle-question-display');
+  const answerBtn       = document.getElementById('answer-question-btn');
+  if (isQuestionActive(entity) && questionSection) {
+    if (questionDisplay) questionDisplay.textContent = `"${entity.circleQuestion}"`;
+    questionSection.classList.remove('hidden');
+    if (answerBtn) {
+      answerBtn.addEventListener('click', () => {
+        window.location.href = `compose.html?id=${entityId}&question=${encodeURIComponent(entity.circleQuestion)}`;
+      });
+    }
+  }
+
+  // Board full check (only relevant if room is open)
   const leaveBtn = document.getElementById('leave-whisper-btn');
   const fullMsg = document.getElementById('board-full-msg');
-
-  if (full) {
-    if (leaveBtn) leaveBtn.classList.add('hidden');
-    if (fullMsg) fullMsg.classList.remove('hidden');
-  } else {
-    if (leaveBtn) {
-      leaveBtn.addEventListener('click', () => {
-        let url = `compose.html?id=${entityId}`;
-        if (isTrustLink) url += `&trust=${trustParam}`;
-        window.location.href = url;
-      });
+  if (roomOpen) {
+    const full = await isBoardFull(entityId);
+    if (full) {
+      if (leaveBtn) leaveBtn.classList.add('hidden');
+      if (fullMsg) fullMsg.classList.remove('hidden');
+    } else {
+      if (leaveBtn) {
+        leaveBtn.addEventListener('click', () => {
+          window.location.href = `compose.html?id=${entityId}`;
+        });
+      }
     }
   }
 
@@ -611,6 +917,16 @@ async function initCompose() {
   if (!recipient) {
     document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center text-muted font-serif italic text-xl">This room does not exist.</div>`;
     return;
+  }
+
+  // Show circle question context if answering one
+  const questionParam = params.get('question');
+  const questionContext = document.getElementById('question-context');
+  if (questionParam && questionContext) {
+    questionContext.textContent = `"${questionParam}"`;
+    questionContext.closest?.('[data-question-wrap]')?.classList.remove('hidden');
+    const wrap = document.getElementById('question-context-wrap');
+    if (wrap) wrap.classList.remove('hidden');
   }
 
   // Show recipient's name and photo

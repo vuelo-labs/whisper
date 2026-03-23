@@ -7,8 +7,11 @@ CREATE TABLE IF NOT EXISTS entities (
   display_name TEXT,
   photo_url    TEXT,
   sigil_params TEXT,              -- JSON string
-  trust_token  TEXT NOT NULL,
-  expiry       TEXT NOT NULL DEFAULT '24h',
+  trust_token               TEXT NOT NULL,
+  circle_question           TEXT,
+  circle_question_expires_at TEXT,
+  room_open_until           TEXT,
+  expiry                    TEXT NOT NULL DEFAULT '24h',
   note_count   INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
@@ -62,3 +65,28 @@ CREATE INDEX IF NOT EXISTS idx_whispers_recipient ON whispers(recipient_id, stat
 CREATE INDEX IF NOT EXISTS idx_whispers_sender    ON whispers(sender_id);
 CREATE INDEX IF NOT EXISTS idx_outbound_sender    ON outbound_log(sender_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trust_circle_owner ON trust_circle(owner_id);
+
+-- Circle requests: someone found a trust link and asked to join
+-- name = what they said their name is (display only, not verified)
+-- requester_id = SHA-256 hash of their email (never stored as plaintext)
+CREATE TABLE IF NOT EXISTS circle_requests (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE,
+  requester_id  TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'pending',
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(owner_id, requester_id)
+);
+CREATE INDEX IF NOT EXISTS idx_circle_requests_owner ON circle_requests(owner_id, status);
+
+-- One-time invite links: auto-accept on first use, falls back to approval queue on reuse
+CREATE TABLE IF NOT EXISTS invite_links (
+  id         TEXT PRIMARY KEY,
+  owner_id   TEXT NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE,
+  used_by    TEXT,
+  used_at    TEXT,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_invite_links_owner ON invite_links(owner_id);

@@ -40,23 +40,12 @@ function generateTrustToken() {
 }
 
 // Generate sigil SVG from explicit params
-// circlesIn: how many circles this entity is a member of — adds outer orbit rings
-function generateSigilFromParams({ rings, lines, rotation, innerRatio, sides, hue, circlesIn = 0 }, size = 80) {
+function generateSigilFromParams({ rings, lines, rotation, innerRatio, sides, hue }, size = 80) {
   const hue2 = (hue + 137) % 360;
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.42;
   const parts = [];
-
-  // Orbit rings (faint outer rings showing how many circles this entity is in)
-  // Tiers: 1=1 orbit, 3=2, 6=3, 10=4, 15=5
-  const orbitTiers = [1, 3, 6, 10, 15];
-  const orbitCount = orbitTiers.filter(t => circlesIn >= t).length;
-  for (let i = 0; i < orbitCount; i++) {
-    const r = (maxR + (size * 0.06) * (i + 1)).toFixed(2);
-    const opacity = (0.12 - i * 0.02).toFixed(2);
-    parts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="hsl(${hue},30%,70%)" stroke-width="0.5" stroke-dasharray="2 4" opacity="${opacity}"/>`);
-  }
 
   for (let i = 0; i < rings; i++) {
     const r = maxR * ((i + 1) / rings);
@@ -84,12 +73,7 @@ function generateSigilFromParams({ rings, lines, rotation, innerRatio, sides, hu
   parts.push(`<polygon points="${polyPoints.join(' ')}" fill="none" stroke="hsl(${hue},45%,70%)" stroke-width="0.9" opacity="0.6"/>`);
   parts.push(`<circle cx="${cx}" cy="${cy}" r="1.5" fill="hsl(${hue2},50%,70%)" opacity="0.8"/>`);
 
-  // Expand viewBox to show orbits if present
-  const padding = orbitCount > 0 ? size * 0.06 * orbitCount + 4 : 0;
-  const vbSize = size + padding * 2;
-  const vbOffset = -padding;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${vbOffset.toFixed(1)} ${vbOffset.toFixed(1)} ${vbSize.toFixed(1)} ${vbSize.toFixed(1)}">${parts.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${parts.join('')}</svg>`;
 }
 
 // Default params seeded from hash (used when no custom params stored)
