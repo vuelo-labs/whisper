@@ -85,6 +85,12 @@ export async function updateEntity(entityId, updates) {
   return patch(`/entity/${entityId}`, updates, currentToken());
 }
 
+export async function rekeyEntity(entityId, newToken) {
+  if (!isRemote) return local.rekeyEntity(entityId, newToken);
+  try { return await post(`/entity/${entityId}/rekey`, { newToken }); }
+  catch { return { ok: false }; }
+}
+
 // ── Whispers ──────────────────────────────────────────────────────────────────
 
 export async function addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish }) {

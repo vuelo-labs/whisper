@@ -3,7 +3,7 @@
 import { hashEmail, getGhostName, generateTrustToken, generateSigil, generateSigilFromParams, defaultSigilParams } from './entity.js';
 import { scoreSentiment, containsHarm, isVelocityPaste } from './nlp.js';
 import {
-  createEntity, setEntityProfile, getEntity, updateEntity,
+  createEntity, setEntityProfile, getEntity, updateEntity, rekeyEntity,
   getCurrentEntity, setCurrentEntity,
   addWhisper, requestEllisWarm, logOutbound,
   getInboard, getOutboard,
@@ -132,7 +132,13 @@ async function initIndex() {
         // Returning user — preserve their stored token; never overwrite with undefined
         const existing = getCurrentEntity();
         const storedToken = (existing?.entityId === entityId) ? existing?.trustToken : null;
-        setCurrentEntity({ entityId, ghostName, trustToken: storedToken });
+        if (storedToken) {
+          setCurrentEntity({ entityId, ghostName, trustToken: storedToken });
+        } else {
+          // No stored token (cleared localStorage) — rekey to restore access
+          await rekeyEntity(entityId, trustToken);
+          setCurrentEntity({ entityId, ghostName, trustToken });
+        }
       }
       // New user: no display name yet → onboard first
       window.location.href = entity.displayName ? 'dashboard.html' : 'onboard.html';
@@ -754,7 +760,6 @@ async function renderCircleRequests(entityId) {
 async function initRoom() {
   const params = new URLSearchParams(window.location.search);
   const entityId = params.get('id');
-  const trustParam = params.get('trust');
 
   if (!entityId) {
     document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center text-muted font-serif italic text-xl">This room does not exist.</div>`;
@@ -1211,29 +1216,32 @@ async function initCompose() {
       const text = whisperTextarea ? whisperTextarea.value.trim() : '';
       if (!text) return;
 
-      await addWhisper({
-        recipientId,
-        senderId,
-        senderGhost,
-        text,
-        admire: phaseData.admire,
-        appreciate: phaseData.appreciate,
-        wish: phaseData.wish,
-      });
-
-      await logOutbound({
-        senderId,
-        senderGhost,
-        recipientId,
-        recipientGhost: recipient.ghostName,
-        text,
-        status: 'sent',
-      });
-
-      showFinalMessage(
-        'That was brave.',
-        'It has landed quietly. Whether they are ready for it is theirs to decide.'
-      );
+      exhaleBtn.disabled = true;
+      try {
+        await addWhisper({
+          recipientId,
+          senderId,
+          senderGhost,
+          text,
+          admire: phaseData.admire,
+          appreciate: phaseData.appreciate,
+          wish: phaseData.wish,
+        });
+        // Log is best-effort — don't block the send if it fails
+        logOutbound({ senderId, senderGhost, recipientId, recipientGhost: recipient.ghostName, text, status: 'sent' }).catch(() => {});
+        showFinalMessage(
+          'That was brave.',
+          'It has landed quietly. Whether they are ready for it is theirs to decide.'
+        );
+      } catch {
+        exhaleBtn.disabled = false;
+        if (sendChoices) sendChoices.classList.add('hidden');
+        if (holdBtn) holdBtn.classList.remove('hidden');
+        if (harmWarning) {
+          harmWarning.textContent = 'Something went quiet. Check your connection and try again.';
+          harmWarning.classList.remove('hidden');
+        }
+      }
     });
   }
 

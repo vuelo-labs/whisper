@@ -74,6 +74,14 @@ function updateEntity(entityId, updates) {
   return entities[entityId];
 }
 
+function rekeyEntity(entityId, newToken) {
+  const entities = readJSON(KEYS.ENTITIES, {});
+  if (!entities[entityId]) return { ok: false };
+  entities[entityId].trustToken = newToken;
+  writeJSON(KEYS.ENTITIES, entities);
+  return { ok: true };
+}
+
 function getCurrentEntity() {
   return readJSON(KEYS.CURRENT_ENTITY, null);
 }
@@ -336,6 +344,7 @@ export {
   setEntityProfile,
   getEntity,
   updateEntity,
+  rekeyEntity,
   getCurrentEntity,
   setCurrentEntity,
   clearCurrentEntity,

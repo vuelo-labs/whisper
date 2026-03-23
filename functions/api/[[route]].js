@@ -161,6 +161,24 @@ export async function onRequest({ request, env }) {
     return json(remapEntity(row));
   }
 
+  // POST /api/entity/:id/rekey  — replace trust token for session recovery (no auth, rate-limited)
+  if (method === 'POST' && parts[0] === 'entity' && parts[2] === 'rekey') {
+    const entityId = parts[1];
+    const { newToken } = body;
+    if (!newToken || !/^[0-9a-f]{16}$/.test(newToken)) return err('Invalid token');
+    // 3 rekeys per entityId per day, 5 per IP per day — limits takeover window
+    if (await isRateLimited(env, entityId, 'rekey_entity', 3, 86400)) return err('Too many rekey requests', 429);
+    if (await isRateLimited(env, ip, 'rekey_ip', 5, 86400)) return err('Too many requests', 429);
+    const row = await env.DB.prepare(
+      'SELECT entity_id FROM entities WHERE entity_id = ?'
+    ).bind(entityId).first();
+    if (!row) return err('Not found', 404);
+    await env.DB.prepare(
+      'UPDATE entities SET trust_token = ? WHERE entity_id = ?'
+    ).bind(newToken, entityId).run();
+    return json({ ok: true });
+  }
+
   // PATCH /api/entity/:id  — update profile (auth required)
   if (method === 'PATCH' && parts[0] === 'entity' && parts[1]) {
     const entityId = parts[1];
@@ -258,6 +276,9 @@ export async function onRequest({ request, env }) {
       INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish)
       VALUES (?, ?, ?, 'Ellis', ?, '', '', '')
     `).bind(id, entityId, ELLIS_ID, text).run();
+    await env.DB.prepare(
+      'UPDATE entities SET note_count = note_count + 1 WHERE entity_id = ?'
+    ).bind(entityId).run();
     const row = await env.DB.prepare('SELECT * FROM whispers WHERE id = ?').bind(id).first();
     return json(remapWhisper(row), 201);
   }
@@ -288,6 +309,9 @@ export async function onRequest({ request, env }) {
       INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(id, recipientId, senderId, senderGhost, text, admire || null, appreciate || null, wish || null).run();
+    await env.DB.prepare(
+      'UPDATE entities SET note_count = note_count + 1 WHERE entity_id = ?'
+    ).bind(recipientId).run();
 
     const row = await env.DB.prepare('SELECT * FROM whispers WHERE id = ?').bind(id).first();
     return json(remapWhisper(row), 201);
