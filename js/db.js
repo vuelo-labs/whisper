@@ -137,14 +137,30 @@ export async function getOutboard(entityId) {
   catch { return []; }
 }
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
+// ── Trust Circle ──────────────────────────────────────────────────────────────
 
-export async function checkRateLimit(senderId) {
-  if (!isRemote) return local.checkRateLimit(senderId);
-  return get(`/rate/${senderId}`);
+export async function joinCircle(ownerId, memberId) {
+  if (!isRemote) return local.joinCircle(ownerId, memberId);
+  try { return await post(`/circle/${ownerId}/join`, { memberId }); }
+  catch { return { ok: false }; }
 }
 
-export async function incrementRateLimit(senderId) {
-  if (!isRemote) return local.incrementRateLimit(senderId);
-  return post(`/rate/${senderId}`, {});
+export async function getCircleWidth(ownerId) {
+  if (!isRemote) return local.getCircleWidth(ownerId);
+  try { const { width } = await get(`/circle/${ownerId}/width`); return width; }
+  catch { return 0; }
+}
+
+export async function isCircleMember(ownerId, memberId) {
+  if (!isRemote) return local.isCircleMember(ownerId, memberId);
+  try { const { member } = await get(`/circle/${ownerId}/member/${memberId}`); return member; }
+  catch { return false; }
+}
+
+// ── Tokens ────────────────────────────────────────────────────────────────────
+
+export async function getTokenBalance(entityId) {
+  if (!isRemote) return local.getTokenBalance(entityId);
+  try { const { balance } = await get(`/tokens/${entityId}`, currentToken()); return balance; }
+  catch { return 0; }
 }

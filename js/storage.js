@@ -6,6 +6,8 @@ const KEYS = {
   inboard: (id) => `whisper_inboard_${id}`,
   outboard: (id) => `whisper_outboard_${id}`,
   rateLimit: (id) => `whisper_ratelimit_${id}`,
+  circle: (id) => `whisper_circle_${id}`,
+  tokens: (id) => `whisper_tokens_${id}`,
 };
 
 // --- Helpers ---
@@ -205,6 +207,50 @@ function isBoardFull(entityId) {
   return active.length >= 100;
 }
 
+// --- Trust Circle (local fallback) ---
+
+function joinCircle(ownerId, memberId) {
+  if (ownerId === memberId) return { ok: false };
+  const circle = readJSON(KEYS.circle(ownerId), []);
+  if (!circle.includes(memberId)) {
+    circle.push(memberId);
+    writeJSON(KEYS.circle(ownerId), circle);
+  }
+  return { ok: true };
+}
+
+function getCircleWidth(ownerId) {
+  return readJSON(KEYS.circle(ownerId), []).length;
+}
+
+function isCircleMember(ownerId, memberId) {
+  return readJSON(KEYS.circle(ownerId), []).includes(memberId);
+}
+
+// --- Tokens (local fallback) ---
+
+function getTokenBalance(entityId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const ledger = readJSON(KEYS.tokens(entityId), { balance: 0, accrued_date: null });
+
+  if (ledger.accrued_date === today) return ledger.balance;
+
+  const circleSize = getCircleWidth(entityId);
+  const toAdd = Math.min(circleSize, 5);
+  const newBalance = Math.min((ledger.balance || 0) + toAdd, 5);
+  writeJSON(KEYS.tokens(entityId), { balance: newBalance, accrued_date: today });
+  return newBalance;
+}
+
+function spendToken(entityId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const ledger = readJSON(KEYS.tokens(entityId), { balance: 0, accrued_date: today });
+  if (ledger.balance < 1) return false;
+  ledger.balance -= 1;
+  writeJSON(KEYS.tokens(entityId), ledger);
+  return true;
+}
+
 export {
   KEYS,
   createEntity,
@@ -226,4 +272,9 @@ export {
   incrementRateLimit,
   checkRateLimit,
   isBoardFull,
+  joinCircle,
+  getCircleWidth,
+  isCircleMember,
+  getTokenBalance,
+  spendToken,
 };

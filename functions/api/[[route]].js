@@ -34,6 +34,48 @@ async function authorize(env, entityId, request) {
   return row && row.trust_token === token;
 }
 
+// Accrue daily tokens for an entity (lazy — called at send-time)
+// Returns the current balance after accrual.
+async function accrueTokens(env, entityId) {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Get or create ledger row
+  let ledger = await env.DB.prepare(
+    'SELECT * FROM token_ledger WHERE entity_id = ?'
+  ).bind(entityId).first();
+
+  if (!ledger) {
+    await env.DB.prepare(`
+      INSERT INTO token_ledger (entity_id, balance, accrued_date, circle_size_snapshot)
+      VALUES (?, 0, ?, 0)
+    `).bind(entityId, today).run();
+    ledger = { balance: 0, accrued_date: today, circle_size_snapshot: 0 };
+  }
+
+  // Only accrue if we haven't yet today
+  if (ledger.accrued_date === today) {
+    return ledger.balance;
+  }
+
+  // Count current circle size
+  const circleRow = await env.DB.prepare(
+    'SELECT COUNT(*) as c FROM trust_circle WHERE owner_id = ?'
+  ).bind(entityId).first();
+  const circleSize = circleRow?.c || 0;
+
+  // Tokens to add = min(circleSize, 5), capped so total doesn't exceed 5
+  const toAdd = Math.min(circleSize, 5);
+  const newBalance = Math.min((ledger.balance || 0) + toAdd, 5);
+
+  await env.DB.prepare(`
+    UPDATE token_ledger
+    SET balance = ?, accrued_date = ?, circle_size_snapshot = ?
+    WHERE entity_id = ?
+  `).bind(newBalance, today, circleSize, entityId).run();
+
+  return newBalance;
+}
+
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
@@ -121,11 +163,12 @@ export async function onRequest({ request, env }) {
       SELECT * FROM whispers
       WHERE recipient_id = ? AND status = 'integrated'
       ORDER BY created_at DESC
+      LIMIT 20
     `).bind(parts[1]).all();
     return json((results || []).map(remapWhisper));
   }
 
-  // POST /api/whisper  — send a whisper
+  // POST /api/whisper  — send a whisper (costs 1 token)
   if (method === 'POST' && parts[0] === 'whisper') {
     const { recipientId, senderId, senderGhost, text, admire, appreciate, wish } = body;
     if (!recipientId || !senderId || !text) return err('Missing fields');
@@ -137,6 +180,15 @@ export async function onRequest({ request, env }) {
       WHERE recipient_id = ? AND status IN ('antechamber','integrated')
     `).bind(recipientId).first();
     if ((count?.c || 0) >= 100) return err('Board is full', 409);
+
+    // Accrue and check token balance
+    const balance = await accrueTokens(env, senderId);
+    if (balance < 1) return err('No tokens', 402);
+
+    // Spend 1 token
+    await env.DB.prepare(
+      'UPDATE token_ledger SET balance = balance - 1 WHERE entity_id = ?'
+    ).bind(senderId).run();
 
     const id = uid();
     await env.DB.prepare(`
@@ -205,25 +257,55 @@ export async function onRequest({ request, env }) {
     return json({ id }, 201);
   }
 
-  // ── Rate limiting ─────────────────────────────────────────────────────────────
+  // ── Trust Circle ─────────────────────────────────────────────────────────────
 
-  // GET /api/rate/:senderId
-  if (method === 'GET' && parts[0] === 'rate' && parts[1]) {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const row = await env.DB.prepare(`
-      SELECT COUNT(*) as c FROM rate_limits
-      WHERE sender_id = ? AND sent_at > ?
-    `).bind(parts[1], cutoff).first();
-    const count = row?.c || 0;
-    return json({ count, exceeded: count >= 3 });
+  // POST /api/circle/:ownerId/join  — join an owner's circle (requires sender auth)
+  if (method === 'POST' && parts[0] === 'circle' && parts[2] === 'join') {
+    const ownerId  = parts[1];
+    const { memberId } = body;
+    if (!memberId) return err('Missing memberId');
+    if (memberId === ownerId) return err('Cannot join your own circle');
+
+    // Ensure member entity exists
+    const member = await env.DB.prepare(
+      'SELECT entity_id FROM entities WHERE entity_id = ?'
+    ).bind(memberId).first();
+    if (!member) return err('Member entity not found', 404);
+
+    // Insert — silently ignore if already in circle
+    await env.DB.prepare(`
+      INSERT INTO trust_circle (owner_id, member_id)
+      VALUES (?, ?)
+      ON CONFLICT(owner_id, member_id) DO NOTHING
+    `).bind(ownerId, memberId).run();
+
+    return json({ ok: true });
   }
 
-  // POST /api/rate/:senderId
-  if (method === 'POST' && parts[0] === 'rate' && parts[1]) {
-    await env.DB.prepare(
-      'INSERT INTO rate_limits (sender_id) VALUES (?)'
-    ).bind(parts[1]).run();
-    return json({ ok: true }, 201);
+  // GET /api/circle/:ownerId/width  — circle member count (public)
+  if (method === 'GET' && parts[0] === 'circle' && parts[2] === 'width') {
+    const row = await env.DB.prepare(
+      'SELECT COUNT(*) as c FROM trust_circle WHERE owner_id = ?'
+    ).bind(parts[1]).first();
+    return json({ width: row?.c || 0 });
+  }
+
+  // GET /api/circle/:ownerId/member/:memberId  — check membership (public)
+  if (method === 'GET' && parts[0] === 'circle' && parts[2] === 'member' && parts[3]) {
+    const row = await env.DB.prepare(
+      'SELECT 1 FROM trust_circle WHERE owner_id = ? AND member_id = ?'
+    ).bind(parts[1], parts[3]).first();
+    return json({ member: !!row });
+  }
+
+  // ── Tokens ───────────────────────────────────────────────────────────────────
+
+  // GET /api/tokens/:entityId  — get balance (accrues if needed, auth required)
+  if (method === 'GET' && parts[0] === 'tokens' && parts[1]) {
+    const entityId = parts[1];
+    if (!(await authorize(env, entityId, request))) return err('Unauthorized', 401);
+    const balance = await accrueTokens(env, entityId);
+    return json({ balance });
   }
 
   return err('Not found', 404);
