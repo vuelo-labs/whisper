@@ -9,7 +9,7 @@ import {
   getInboard, getOutboard,
   integrateWhisper, releaseWhisper, clearBoard,
   getIntegratedWhispers, checkRateLimit, incrementRateLimit, isBoardFull,
-} from './storage.js';
+} from './db.js';
 
 // Detect current page
 const page = (() => {
