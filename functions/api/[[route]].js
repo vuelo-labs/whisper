@@ -78,6 +78,37 @@ async function accrueTokens(env, entityId) {
   return newBalance;
 }
 
+// Simple in-memory rate limiter using D1 for persistence.
+// Tracks request counts per IP per window in a rate_limits table.
+// Returns true if the request should be blocked.
+async function isRateLimited(env, ip, key, maxRequests, windowSeconds) {
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - windowSeconds;
+  const id = `${key}:${ip}`;
+  try {
+    // Prune old entries and count recent ones atomically
+    await env.DB.prepare(
+      'DELETE FROM rate_limits WHERE id = ? AND window_start < ?'
+    ).bind(id, windowStart).run();
+    const row = await env.DB.prepare(
+      'SELECT count FROM rate_limits WHERE id = ?'
+    ).bind(id).first();
+    if (!row) {
+      await env.DB.prepare(
+        'INSERT INTO rate_limits (id, count, window_start) VALUES (?, 1, ?)'
+      ).bind(id, now).run();
+      return false;
+    }
+    if (row.count >= maxRequests) return true;
+    await env.DB.prepare(
+      'UPDATE rate_limits SET count = count + 1 WHERE id = ?'
+    ).bind(id).run();
+    return false;
+  } catch {
+    return false; // Fail open — don't block on DB error
+  }
+}
+
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
@@ -86,6 +117,7 @@ export async function onRequest({ request, env }) {
   const url    = new URL(request.url);
   const parts  = url.pathname.replace('/api/', '').split('/');
   const method = request.method;
+  const ip     = request.headers.get('CF-Connecting-IP') || 'unknown';
 
   let body = {};
   if (['POST', 'PATCH'].includes(method)) {
@@ -94,17 +126,18 @@ export async function onRequest({ request, env }) {
 
   // ── Entities ────────────────────────────────────────────────────────────────
 
-  // GET /api/entity/:id
-  if (method === 'GET' && parts[0] === 'entity' && parts[1]) {
+  // GET /api/entity/:id  — public, no trustToken in response
+  if (method === 'GET' && parts[0] === 'entity' && parts[1] && !parts[2]) {
     const row = await env.DB.prepare(
       'SELECT * FROM entities WHERE entity_id = ?'
     ).bind(parts[1]).first();
     if (!row) return err('Not found', 404);
-    return json(remapEntity(row));
+    return json(remapEntityPublic(row));
   }
 
-  // POST /api/entity  — create / upsert
+  // POST /api/entity  — create / upsert (5 per IP per day)
   if (method === 'POST' && parts[0] === 'entity') {
+    if (await isRateLimited(env, ip, 'entity', 5, 86400)) return err('Too many requests', 429);
     const { entityId, ghostName, trustToken } = body;
     if (!entityId || !ghostName || !trustToken) return err('Missing fields');
     if (!/^[0-9a-f]{64}$/.test(entityId)) return err('Invalid entityId');
@@ -187,7 +220,7 @@ export async function onRequest({ request, env }) {
     return json((results || []).map(remapWhisper));
   }
 
-  // GET /api/whispers/:recipientId/public  — integrated only (public)
+  // GET /api/whispers/:recipientId/public  — integrated only, no senderId (public)
   if (method === 'GET' && parts[0] === 'whispers' && parts[1] && parts[2] === 'public') {
     const { results } = await env.DB.prepare(`
       SELECT * FROM whispers
@@ -195,13 +228,45 @@ export async function onRequest({ request, env }) {
       ORDER BY created_at DESC
       LIMIT 20
     `).bind(parts[1]).all();
-    return json((results || []).map(remapWhisper));
+    return json((results || []).map(remapWhisperPublic));
   }
 
-  // POST /api/whisper  — send a whisper (costs 1 token)
+  // POST /api/entity/:id/warm  — request an Ellis warm message (auth required, posts to own inboard)
+  if (method === 'POST' && parts[0] === 'entity' && parts[2] === 'warm') {
+    const entityId = parts[1];
+    if (!(await authorize(env, entityId, request))) return err('Unauthorized', 401);
+    const WARMTH = [
+      "You carry more than people realise, and you do it quietly. That takes a kind of strength most people never develop.",
+      "There is something in the way you move through difficulty that tells a story about who you really are. It's a good story.",
+      "The people who matter most to you feel it — even when you think they can't see it.",
+      "You have rebuilt yourself more times than you give yourself credit for.",
+      "Your instincts about people are better than you let yourself believe.",
+      "The version of you that others talk about when you leave the room is kinder and more impressive than the one you see.",
+      "Some of the things you think make you difficult are the same things that make you worth knowing.",
+      "You are not as far behind as you feel right now. You are exactly where a person like you needs to be.",
+      "The care you put into small things says everything about the kind of person you are.",
+      "There is a warmth in you that draws people closer without you noticing it happening.",
+      "You underestimate how often your presence alone is the thing that steadies someone else.",
+      "Something you dismissed as ordinary about yourself is genuinely rare.",
+      "The fact that you keep going, even on the days it doesn't feel worth it, is not nothing. It's everything.",
+      "Your sensitivity is not a weakness. It is how you notice things other people walk past.",
+      "You have already done the hardest part of something important. You just haven't seen the result yet.",
+    ];
+    const text = WARMTH[Math.floor(Math.random() * WARMTH.length)];
+    const id = uid();
+    await env.DB.prepare(`
+      INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish)
+      VALUES (?, ?, ?, 'Ellis', ?, '', '', '')
+    `).bind(id, entityId, ELLIS_ID, text).run();
+    const row = await env.DB.prepare('SELECT * FROM whispers WHERE id = ?').bind(id).first();
+    return json(remapWhisper(row), 201);
+  }
+
+  // POST /api/whisper  — send a whisper (costs 1 token, sender auth required)
   if (method === 'POST' && parts[0] === 'whisper') {
     const { recipientId, senderId, senderGhost, text, admire, appreciate, wish } = body;
     if (!recipientId || !senderId || !text) return err('Missing fields');
+    if (!(await authorize(env, senderId, request))) return err('Unauthorized', 401);
     if (text.length > 280) return err('Too long');
 
     // Check board capacity
@@ -406,8 +471,9 @@ export async function onRequest({ request, env }) {
 
   // ── Circle Requests ──────────────────────────────────────────────────────────
 
-  // POST /api/circle/:ownerId/request  — ask to join (public, no auth)
+  // POST /api/circle/:ownerId/request  — ask to join (10 per IP per hour)
   if (method === 'POST' && parts[0] === 'circle' && parts[2] === 'request') {
+    if (await isRateLimited(env, ip, 'circle_req', 10, 3600)) return err('Too many requests', 429);
     const ownerId = parts[1];
     const { name, requesterId } = body;
     if (!name || !requesterId) return err('Missing name or requesterId');
@@ -488,14 +554,14 @@ export async function onRequest({ request, env }) {
 
 // ── Remappers ─────────────────────────────────────────────────────────────────
 
-function remapEntity(r) {
+// Public entity — never includes trustToken (returned to anyone, including room visitors)
+function remapEntityPublic(r) {
   return {
     entityId:                 r.entity_id,
     ghostName:                r.ghost_name,
     displayName:              r.display_name              || null,
     photoUrl:                 r.photo_url                 || null,
     sigilParams:              r.sigil_params              ? (() => { try { return JSON.parse(r.sigil_params); } catch { return null; } })() : null,
-    trustToken:               r.trust_token,
     circleQuestion:           r.circle_question           || null,
     circleQuestionExpiresAt:  r.circle_question_expires_at || null,
     roomOpenUntil:            r.room_open_until            || null,
@@ -503,6 +569,11 @@ function remapEntity(r) {
     noteCount:                r.note_count,
     createdAt:                r.created_at,
   };
+}
+
+// Private entity — includes trustToken (only returned to the authenticated owner)
+function remapEntity(r) {
+  return { ...remapEntityPublic(r), trustToken: r.trust_token };
 }
 
 function remapWhisper(r) {
@@ -518,6 +589,12 @@ function remapWhisper(r) {
     status:      r.status,
     createdAt:   r.created_at,
   };
+}
+
+// Public whisper — no senderId (prevents deanonymisation of senders)
+function remapWhisperPublic(r) {
+  const { senderId, ...pub } = remapWhisper(r); // eslint-disable-line no-unused-vars
+  return pub;
 }
 
 function remapOutbound(r) {

@@ -89,7 +89,34 @@ export async function updateEntity(entityId, updates) {
 
 export async function addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish }) {
   if (!isRemote) return local.addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish });
-  return post('/whisper', { recipientId, senderId, senderGhost, text, admire, appreciate, wish });
+  return post('/whisper', { recipientId, senderId, senderGhost, text, admire, appreciate, wish }, currentToken());
+}
+
+export async function requestEllisWarm(entityId) {
+  if (!isRemote) {
+    // Local: pick from pool and insert directly
+    const WARMTH = [
+      "You carry more than people realise, and you do it quietly. That takes a kind of strength most people never develop.",
+      "There is something in the way you move through difficulty that tells a story about who you really are. It's a good story.",
+      "The people who matter most to you feel it — even when you think they can't see it.",
+      "You have rebuilt yourself more times than you give yourself credit for.",
+      "Your instincts about people are better than you let yourself believe.",
+      "The version of you that others talk about when you leave the room is kinder and more impressive than the one you see.",
+      "Some of the things you think make you difficult are the same things that make you worth knowing.",
+      "You are not as far behind as you feel right now. You are exactly where a person like you needs to be.",
+      "The care you put into small things says everything about the kind of person you are.",
+      "There is a warmth in you that draws people closer without you noticing it happening.",
+      "You underestimate how often your presence alone is the thing that steadies someone else.",
+      "Something you dismissed as ordinary about yourself is genuinely rare.",
+      "The fact that you keep going, even on the days it doesn't feel worth it, is not nothing. It's everything.",
+      "Your sensitivity is not a weakness. It is how you notice things other people walk past.",
+      "You have already done the hardest part of something important. You just haven't seen the result yet.",
+    ];
+    const text = WARMTH[Math.floor(Math.random() * WARMTH.length)];
+    const ELLIS_ID = 'e111500000000000000000000000000000000000000000000000000000000000';
+    return local.addWhisper({ recipientId: entityId, senderId: ELLIS_ID, senderGhost: 'Ellis', text, admire: '', appreciate: '', wish: '' });
+  }
+  return post(`/entity/${entityId}/warm`, {}, currentToken());
 }
 
 export async function getInboard(entityId) {
@@ -141,7 +168,7 @@ export async function getOutboard(entityId) {
 
 export async function joinCircle(ownerId, memberId) {
   if (!isRemote) return local.joinCircle(ownerId, memberId);
-  try { return await post(`/circle/${ownerId}/join`, { memberId }); }
+  try { return await post(`/circle/${ownerId}/join`, { memberId }, currentToken()); }
   catch { return { ok: false }; }
 }
 

@@ -5,7 +5,7 @@ import { scoreSentiment, containsHarm, isVelocityPaste } from './nlp.js';
 import {
   createEntity, setEntityProfile, getEntity, updateEntity,
   getCurrentEntity, setCurrentEntity,
-  addWhisper, logOutbound,
+  addWhisper, requestEllisWarm, logOutbound,
   getInboard, getOutboard,
   integrateWhisper, releaseWhisper, clearBoard,
   getIntegratedWhispers, isBoardFull,
@@ -43,23 +43,6 @@ const ELLIS_PUSHES = [
   "What do you think I'm afraid to want?",
 ];
 
-const ELLIS_WARMTH = [
-  "You carry more than people realise, and you do it quietly. That takes a kind of strength most people never develop.",
-  "There is something in the way you move through difficulty that tells a story about who you really are. It's a good story.",
-  "The people who matter most to you feel it — even when you think they can't see it.",
-  "You have rebuilt yourself more times than you give yourself credit for.",
-  "Your instincts about people are better than you let yourself believe.",
-  "The version of you that others talk about when you leave the room is kinder and more impressive than the one you see.",
-  "Some of the things you think make you difficult are the same things that make you worth knowing.",
-  "You are not as far behind as you feel right now. You are exactly where a person like you needs to be.",
-  "The care you put into small things says everything about the kind of person you are.",
-  "There is a warmth in you that draws people closer without you noticing it happening.",
-  "You underestimate how often your presence alone is the thing that steadies someone else.",
-  "Something you dismissed as ordinary about yourself is genuinely rare.",
-  "The fact that you keep going, even on the days it doesn't feel worth it, is not nothing. It's everything.",
-  "Your sensitivity is not a weakness. It is how you notice things other people walk past.",
-  "You have already done the hardest part of something important. You just haven't seen the result yet.",
-];
 
 
 // Timer helpers
@@ -407,7 +390,7 @@ async function initDashboard() {
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
       const url = `${baseUrl}room.html?id=${current.entityId}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Room link copied to the ether.'));
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Link copied. Sharing this takes courage.'));
     });
   }
 
@@ -420,7 +403,7 @@ async function initDashboard() {
       trustBtn.textContent = 'Generate invite link';
       if (!invite?.id) { showCopyFeedback(copyFeedback, 'Could not create link.'); return; }
       const url = `${baseUrl}room.html?id=${current.entityId}&invite=${invite.id}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Invite link copied. First to open it joins automatically.'));
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Invite link copied. Sharing this means you\'re ready to hear what they see.'));
     });
   }
 
@@ -515,15 +498,9 @@ async function initDashboard() {
   }
   if (ellisWarmBtn) {
     ellisWarmBtn.addEventListener('click', async () => {
-      const text = ELLIS_WARMTH[Math.floor(Math.random() * ELLIS_WARMTH.length)];
-      // Post as a whisper from Ellis directly to your inboard
-      await addWhisper({
-        recipientId: current.entityId,
-        senderId: ELLIS_ID,
-        senderGhost: 'Ellis',
-        text,
-        admire: '', appreciate: '', wish: '',
-      });
+      ellisWarmBtn.disabled = true;
+      await requestEllisWarm(current.entityId);
+      ellisWarmBtn.disabled = false;
       await renderInboard(current.entityId);
       await renderNoteCount(current.entityId);
     });
@@ -532,7 +509,21 @@ async function initDashboard() {
   // Clear board
   const clearBtn = document.getElementById('clear-board-btn');
   if (clearBtn) {
+    let clearPending = false;
+    let clearTimer = null;
     clearBtn.addEventListener('click', async () => {
+      if (!clearPending) {
+        clearPending = true;
+        clearBtn.textContent = 'tap again to clear everything';
+        clearTimer = setTimeout(() => {
+          clearPending = false;
+          clearBtn.textContent = 'clear the air ↑';
+        }, 3000);
+        return;
+      }
+      clearTimeout(clearTimer);
+      clearPending = false;
+      clearBtn.textContent = 'clear the air ↑';
       await clearBoard(current.entityId);
       await renderInboard(current.entityId);
       await renderNoteCount(current.entityId);
@@ -565,16 +556,29 @@ async function renderInboard(entityId) {
 
   let html = '';
 
-  if (antechamber.length === 0 && integrated.length === 0) {
+  // First-visit welcome: show when the board is empty and entity was just created (no notes ever)
+  const isFirstVisit = antechamber.length === 0 && integrated.length === 0 && (entityData?.noteCount || 0) === 0;
+  if (isFirstVisit) {
+    html = `<div class="rounded-2xl p-6 mb-6 text-center" style="background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.08);">
+      <p class="font-serif text-text text-lg italic mb-3">Your room is ready.</p>
+      <p class="text-muted text-sm font-light leading-relaxed mb-4">
+        Share your room link and whispers will arrive here. You choose when to open them.<br/>
+        Your <strong class="text-text/70 font-normal">circle</strong> is the people you trust. Invite them, and they earn you more whispers each day.<br/>
+        <strong class="text-text/70 font-normal">Ellis</strong> is always here — ask for a prompt to share, or ask for something good.
+      </p>
+      <p class="text-muted/50 text-xs font-light italic">Whispers wait in the antechamber until you're ready. Unread ones drift away after your room's window closes.</p>
+    </div>`;
+  } else if (antechamber.length === 0 && integrated.length === 0) {
     html = `<div class="text-center py-16 text-muted">
-      <p class="text-lg font-serif italic">Silence hangs here, waiting to be filled.</p>
-      <p class="text-sm mt-2">Share your room and let the whispers find you.</p>
+      <p class="text-lg font-serif italic">Your room is quiet.</p>
+      <p class="text-sm mt-2">When someone leaves a whisper, it will wait here for you.</p>
     </div>`;
   }
 
   if (antechamber.length > 0) {
     html += `<div class="mb-8">
-      <h3 class="text-xs uppercase tracking-widest text-muted mb-4">Antechamber — ${antechamber.length} waiting</h3>
+      <h3 class="text-xs uppercase tracking-widest text-muted mb-1">Antechamber — ${antechamber.length} waiting</h3>
+      <p class="text-muted/40 text-xs font-light mb-4">whispers wait here until you're ready to open them</p>
       <div class="space-y-3">`;
     antechamber.forEach(w => {
       const drift = driftTime(w.createdAt, entityExpiry);
@@ -590,10 +594,11 @@ async function renderInboard(entityId) {
           <p class="font-serif text-text text-base leading-relaxed">"${escapeHtml(w.text)}"</p>
           <p class="text-xs text-muted mt-3">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}</p>
         </div>
-        <div class="mt-4 flex gap-3 items-center">
+        <div class="mt-4 flex gap-3 items-center flex-wrap">
           <button class="unveil-btn btn-ghost text-sm" data-id="${w.id}">Open</button>
           <button class="integrate-btn btn-sage text-sm hidden" data-id="${w.id}" data-recipient="${entityId}">Carry</button>
           <button class="release-btn btn-muted text-sm hidden" data-id="${w.id}" data-recipient="${entityId}">Release</button>
+          <span class="carry-release-hint hidden text-muted/40 text-xs font-light">Carry — keep it with you &nbsp;·&nbsp; Release — let it go</span>
         </div>
       </div>`;
     });
@@ -635,7 +640,7 @@ function handleUnveil(whisperId, entityId) {
   if (!card) return;
 
   // Show anchor overlay
-  showAnchorOverlay('These are perceptions, not definitions.', () => {
+  showAnchorOverlay('These are perceptions, not definitions. It takes courage to hear what others see.', () => {
     // Remove fog
     card.classList.add('unveiled');
     card.querySelector('.fog-content').classList.add('hidden');
@@ -643,6 +648,7 @@ function handleUnveil(whisperId, entityId) {
     card.querySelector('.unveil-btn').classList.add('hidden');
     card.querySelector('.integrate-btn').classList.remove('hidden');
     card.querySelector('.release-btn').classList.remove('hidden');
+    card.querySelector('.carry-release-hint')?.classList.remove('hidden');
   });
 }
 
@@ -676,7 +682,7 @@ async function renderOutboard(entityId) {
   const outboard = await getOutboard(entityId);
   if (outboard.length === 0) {
     container.innerHTML = `<div class="text-center py-16 text-muted">
-      <p class="text-lg font-serif italic">You haven't spoken into the void yet.</p>
+      <p class="text-lg font-serif italic">You haven't left a whisper for anyone yet.</p>
       <p class="text-sm mt-2">When you leave a whisper for someone, it will appear here.</p>
     </div>`;
     return;
@@ -950,7 +956,8 @@ async function initCompose() {
     return;
   }
 
-  const isTrusted = trustParam && trustParam === recipient.trustToken;
+  // Trusted mode: sender is a circle member of the recipient (skips liturgy phases)
+  const isTrusted = await isCircleMember(recipientId, senderId);
   const trustedBadge = document.getElementById('trusted-badge');
   if (isTrusted && trustedBadge) {
     trustedBadge.classList.remove('hidden');
@@ -1065,12 +1072,8 @@ async function initCompose() {
   }
 
   // Mirror phase
-  const mirrorInput = document.getElementById('mirror-input');
   const mirrorNext = document.getElementById('mirror-next');
-  if (mirrorInput && mirrorNext) {
-    mirrorInput.addEventListener('input', () => {
-      mirrorNext.disabled = mirrorInput.value.trim().toLowerCase() !== 'to help them thrive';
-    });
+  if (mirrorNext) {
     mirrorNext.addEventListener('click', () => {
       currentPhase++;
       showPhase(currentPhase);
@@ -1264,6 +1267,21 @@ async function initCompose() {
     if (liturgy) liturgy.classList.add('hidden');
     if (finalTitle) finalTitle.textContent = title;
     if (finalSub) finalSub.textContent = subtitle;
+
+    // Replace static links with meaningful destinations
+    const linksEl = document.getElementById('final-links');
+    if (linksEl) {
+      const roomUrl = `room.html?id=${recipientId}`;
+      const hasSender = !!getCurrentEntity();
+      linksEl.innerHTML = `
+        <a href="${roomUrl}" class="inline-block mt-8 text-muted/50 text-xs hover:text-muted/70 transition-colors font-light">
+          ← back to their room
+        </a>
+        ${hasSender ? `<a href="dashboard.html" class="inline-block mt-4 text-muted/40 text-xs hover:text-muted/60 transition-colors font-light">
+          open your own room →
+        </a>` : ''}`;
+    }
+
     if (finalMsg) finalMsg.classList.remove('hidden');
   }
 
@@ -1310,18 +1328,27 @@ function showEllisPromptModal(text) {
 function showAnchorOverlay(message, callback) {
   const overlay = document.createElement('div');
   overlay.className = 'anchor-overlay';
-  overlay.innerHTML = `<p class="font-serif text-text text-xl text-center max-w-xs">${message}</p>`;
+  overlay.style.cursor = 'pointer';
+  overlay.innerHTML = `
+    <div class="text-center max-w-xs">
+      <p class="font-serif text-text text-xl">${escapeHtml(message)}</p>
+      <p class="text-muted/50 text-xs mt-4 font-light tracking-wide">tap to continue</p>
+    </div>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('visible'));
 
-  setTimeout(() => {
+  function dismiss() {
     overlay.classList.remove('visible');
     overlay.classList.add('fading');
     setTimeout(() => {
       overlay.remove();
       if (callback) callback();
     }, 600);
-  }, 1500);
+  }
+
+  overlay.addEventListener('click', dismiss);
+  // Fallback auto-dismiss after 8s in case user doesn't know to tap
+  setTimeout(dismiss, 8000);
 }
 
 function copyToClipboard(text, onSuccess) {

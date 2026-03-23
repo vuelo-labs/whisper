@@ -91,3 +91,10 @@ CREATE TABLE IF NOT EXISTS invite_links (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_invite_links_owner ON invite_links(owner_id);
+
+-- Rate limiting: tracks request counts per IP per key (pruned on access)
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id           TEXT PRIMARY KEY,  -- '{key}:{ip}'
+  count        INTEGER NOT NULL DEFAULT 1,
+  window_start INTEGER NOT NULL   -- unix timestamp of first request in window
+);

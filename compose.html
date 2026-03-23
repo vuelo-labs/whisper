@@ -122,10 +122,10 @@
                       id="circle-admire" class="timer-circle"
                       style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
             </svg>
-            <span id="timer-admire" class="absolute text-sage text-xs font-light">60</span>
+            <span id="timer-admire" class="hidden"></span>
           </div>
 
-          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step one of four — Admire</p>
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Admire</p>
           <h3 class="font-serif text-xl text-text italic leading-snug">
             What is a quiet strength this person has?
           </h3>
@@ -164,10 +164,10 @@
                       id="circle-appreciate" class="timer-circle"
                       style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
             </svg>
-            <span id="timer-appreciate" class="absolute text-xs font-light" style="color: #E5C1CD; opacity: 0.7;">60</span>
+            <span id="timer-appreciate" class="hidden"></span>
           </div>
 
-          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step two of four — Appreciate</p>
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Appreciate</p>
           <h3 class="font-serif text-xl text-text italic leading-snug">
             What is a small way they've impacted your world?
           </h3>
@@ -206,10 +206,10 @@
                       id="circle-wish" class="timer-circle"
                       style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
             </svg>
-            <span id="timer-wish" class="absolute text-xs font-light" style="color: #C9A84C; opacity: 0.7;">60</span>
+            <span id="timer-wish" class="hidden"></span>
           </div>
 
-          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step three of four — Wish</p>
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Wish</p>
           <h3 class="font-serif text-xl text-text italic leading-snug">
             What good fortune do you hope finds them soon?
           </h3>
@@ -239,38 +239,29 @@
       <!-- ── Phase: Mirror ── -->
       <div id="phase-mirror" class="phase hidden">
         <div class="text-center mb-10">
-          <div class="w-16 h-16 rounded-full mx-auto mb-6"
+          <div class="w-16 h-16 rounded-full mx-auto mb-6 breathe"
                style="background: radial-gradient(circle, rgba(107,103,98,0.15) 0%, transparent 70%); border: 1px solid rgba(107,103,98,0.2);">
           </div>
 
-          <p class="text-muted text-xs uppercase tracking-widest mb-6">The final mirror</p>
+          <p class="text-muted text-xs uppercase tracking-widest mb-6">Before you send</p>
           <h3 class="font-serif text-2xl text-text leading-snug mb-8">
-            Are you leaving this to help them thrive,<br/>
-            <span class="italic text-muted">or to make yourself feel better?</span>
+            Are you leaving this to help them,<br/>
+            <span class="italic text-muted">or to unburden yourself?</span>
           </h3>
 
-          <p class="text-muted text-sm font-light mb-8 leading-relaxed">
+          <p class="text-muted text-sm font-light mb-10 leading-relaxed">
             Sit with that for a moment.<br/>
-            When you're ready — and only when the answer is honest — type it below.
+            Both can be true. Only you know.
           </p>
         </div>
 
         <div class="text-center">
-          <input
-            id="mirror-input"
-            type="text"
-            placeholder="type your answer…"
-            autocomplete="off"
-            class="w-full max-w-xs mx-auto block bg-surface rounded-2xl px-5 py-4 text-center text-text placeholder-muted font-serif text-base border border-transparent focus:border-muted/20 focus:outline-none transition-all mb-6"
-          />
-          <p class="text-muted/40 text-xs mb-6 font-light">type exactly: <em>to help them thrive</em></p>
           <button
             id="mirror-next"
-            disabled
-            class="px-8 py-3 rounded-full text-sm font-sans tracking-wide transition-all disabled:opacity-20"
+            class="px-8 py-3 rounded-full text-sm font-sans tracking-wide transition-all"
             style="background: rgba(138,154,91,0.08); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
           >
-            I'm ready to whisper
+            I'm ready
           </button>
         </div>
       </div>
@@ -349,7 +340,7 @@
             onmouseover="this.style.background='rgba(138,154,91,0.18)'"
             onmouseout="this.style.background='rgba(138,154,91,0.1)'"
           >
-            Exhale to Board
+            Send it
           </button>
           <button
             id="void-btn"
@@ -358,10 +349,10 @@
             onmouseover="this.style.borderColor='#4a4a4a'; this.style.color='#e8e4dc'"
             onmouseout="this.style.borderColor='#2a2a2a'; this.style.color='#6b6762'"
           >
-            Cast to Void
+            Release into the air
           </button>
           <p class="text-muted/30 text-center text-xs font-light mt-2">
-            Cast to Void — your words leave, but reach no one. Sometimes that's enough.
+            Release into the air — your words leave you, but reach no one. Sometimes that's enough.
           </p>
         </div>
 
@@ -376,9 +367,7 @@
       </div>
       <h2 id="final-title" class="font-serif text-2xl text-text italic mb-4"></h2>
       <p id="final-subtitle" class="text-muted text-sm font-light leading-relaxed"></p>
-      <a href="index.html" class="inline-block mt-10 text-muted/40 text-xs hover:text-muted/60 transition-colors font-light">
-        return to silence →
-      </a>
+      <div id="final-links" class="flex flex-col items-center gap-2"></div>
     </div>
 
   </div>
