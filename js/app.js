@@ -1,6 +1,6 @@
 // app.js — Page-specific logic; detects current page and initialises
 
-import { hashEmail, getGhostName, generateTrustToken, generateSigil } from './entity.js';
+import { hashEmail, getGhostName, generateTrustToken, generateSigil, generateSigilFromParams, defaultSigilParams } from './entity.js';
 import { scoreSentiment, containsHarm, isVelocityPaste } from './nlp.js';
 import {
   createEntity, setEntityProfile, getEntity, updateEntity,
@@ -66,6 +66,14 @@ async function initIndex() {
 }
 
 // --- ONBOARD PAGE ---
+const PALETTES = [
+  { name: 'Sage',    hue: 85,  color: '#8A9A5B' },
+  { name: 'Ember',   hue: 22,  color: '#C97A3A' },
+  { name: 'Dusk',    hue: 265, color: '#8A6EC9' },
+  { name: 'Rose',    hue: 345, color: '#C96E8A' },
+  { name: 'Glacial', hue: 205, color: '#5B8FA0' },
+];
+
 function initOnboard() {
   const current = getCurrentEntity();
   if (!current) { window.location.href = 'index.html'; return; }
@@ -80,9 +88,103 @@ function initOnboard() {
   const photoPreview = document.getElementById('photo-preview');
   const photoPlaceholder = document.getElementById('photo-placeholder');
   const submitBtn = document.getElementById('onboard-submit');
-  const sigilContainer = document.getElementById('onboard-sigil');
+  const sigilPreview = document.getElementById('sigil-preview');
 
-  if (sigilContainer) sigilContainer.innerHTML = generateSigil(current.entityId, 48);
+  // Sigil designer state — seed from hash
+  let params = defaultSigilParams(current.entityId);
+
+  function renderPreview() {
+    if (sigilPreview) sigilPreview.innerHTML = generateSigilFromParams(params, 140);
+  }
+
+  function updateActiveControls() {
+    // Rings
+    document.querySelectorAll('[data-rings]').forEach(el => {
+      el.classList.toggle('control-active', parseInt(el.dataset.rings) === params.rings);
+    });
+    // Lines
+    document.querySelectorAll('[data-lines]').forEach(el => {
+      el.classList.toggle('control-active', parseInt(el.dataset.lines) === params.lines);
+    });
+    // Sides
+    document.querySelectorAll('[data-sides]').forEach(el => {
+      el.classList.toggle('control-active', parseInt(el.dataset.sides) === params.sides);
+    });
+    // Palette
+    document.querySelectorAll('[data-hue]').forEach(el => {
+      el.classList.toggle('palette-active', parseInt(el.dataset.hue) === params.hue);
+    });
+    // Rotation
+    const rotSlider = document.getElementById('rotation-slider');
+    if (rotSlider) rotSlider.value = params.rotation;
+  }
+
+  // Bind rings buttons
+  document.querySelectorAll('[data-rings]').forEach(el => {
+    el.addEventListener('click', () => {
+      params.rings = parseInt(el.dataset.rings);
+      updateActiveControls();
+      renderPreview();
+    });
+  });
+
+  // Bind lines buttons
+  document.querySelectorAll('[data-lines]').forEach(el => {
+    el.addEventListener('click', () => {
+      params.lines = parseInt(el.dataset.lines);
+      updateActiveControls();
+      renderPreview();
+    });
+  });
+
+  // Bind sides buttons
+  document.querySelectorAll('[data-sides]').forEach(el => {
+    el.addEventListener('click', () => {
+      params.sides = parseInt(el.dataset.sides);
+      updateActiveControls();
+      renderPreview();
+    });
+  });
+
+  // Bind palette swatches
+  document.querySelectorAll('[data-hue]').forEach(el => {
+    el.addEventListener('click', () => {
+      params.hue = parseInt(el.dataset.hue);
+      updateActiveControls();
+      renderPreview();
+    });
+  });
+
+  // Rotation slider
+  const rotSlider = document.getElementById('rotation-slider');
+  if (rotSlider) {
+    rotSlider.addEventListener('input', () => {
+      params.rotation = parseInt(rotSlider.value);
+      renderPreview();
+    });
+  }
+
+  // Shuffle
+  const shuffleBtn = document.getElementById('shuffle-btn');
+  if (shuffleBtn) {
+    shuffleBtn.addEventListener('click', () => {
+      params = {
+        rings:      2 + Math.floor(Math.random() * 3),
+        lines:      3 + Math.floor(Math.random() * 5),
+        rotation:   Math.floor(Math.random() * 360),
+        innerRatio: 0.3 + Math.random() * 0.25,
+        sides:      3 + Math.floor(Math.random() * 4),
+        hue:        Math.floor(Math.random() * 360),
+      };
+      // Snap hue to nearest palette
+      const nearest = PALETTES.reduce((a, b) =>
+        Math.abs(b.hue - params.hue) < Math.abs(a.hue - params.hue) ? b : a
+      );
+      params.hue = nearest.hue;
+      updateActiveControls();
+      renderPreview();
+    });
+  }
 
   // Photo preview
   if (photoInput) {
@@ -91,18 +193,14 @@ function initOnboard() {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (e) => {
-        const url = e.target.result;
-        if (photoPreview) {
-          photoPreview.src = url;
-          photoPreview.classList.remove('hidden');
-        }
+        if (photoPreview) { photoPreview.src = e.target.result; photoPreview.classList.remove('hidden'); }
         if (photoPlaceholder) photoPlaceholder.classList.add('hidden');
       };
       reader.readAsDataURL(file);
     });
   }
 
-  // Name input → enable button
+  // Name → enable submit
   if (nameInput && submitBtn) {
     nameInput.addEventListener('input', () => {
       submitBtn.disabled = nameInput.value.trim().length < 1;
@@ -116,14 +214,17 @@ function initOnboard() {
       if (!displayName) return;
 
       const photoUrl = (photoPreview && !photoPreview.classList.contains('hidden'))
-        ? photoPreview.src
-        : null;
+        ? photoPreview.src : null;
 
-      setEntityProfile(current.entityId, { displayName, photoUrl });
+      setEntityProfile(current.entityId, { displayName, photoUrl, sigilParams: params });
       setCurrentEntity({ ...current, displayName });
       window.location.href = 'dashboard.html';
     });
   }
+
+  // Initial render
+  renderPreview();
+  updateActiveControls();
 }
 
 // --- DASHBOARD PAGE ---
@@ -155,7 +256,7 @@ function initDashboard() {
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    sigilContainer.innerHTML = generateSigil(current.entityId, 80);
+    sigilContainer.innerHTML = generateSigil(current.entityId, 80, entity.sigilParams || null);
   }
 
   // Expiry selector
@@ -400,7 +501,7 @@ function initRoom() {
     photoAvatarEl.classList.remove('hidden');
     if (sigilContainer) sigilContainer.classList.add('hidden');
   } else if (sigilContainer) {
-    sigilContainer.innerHTML = generateSigil(entityId, 72);
+    sigilContainer.innerHTML = generateSigil(entityId, 72, entity.sigilParams || null);
   }
 
   // Board full check
@@ -471,7 +572,7 @@ function initCompose() {
     recipientPhotoEl.classList.remove('hidden');
     if (recipientSigilEl) recipientSigilEl.classList.add('hidden');
   } else if (recipientSigilEl) {
-    recipientSigilEl.innerHTML = generateSigil(recipientId, 48);
+    recipientSigilEl.innerHTML = generateSigil(recipientId, 48, recipient.sigilParams || null);
   }
 
   // Get or create sender entity

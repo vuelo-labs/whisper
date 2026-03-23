@@ -37,6 +37,7 @@ function createEntity({ entityId, ghostName, trustToken }) {
     trustToken,
     displayName: null,
     photoUrl: null,
+    sigilParams: null,
     expiry: '24h',
     noteCount: 0,
     createdAt: new Date().toISOString(),
@@ -46,11 +47,12 @@ function createEntity({ entityId, ghostName, trustToken }) {
   return entity;
 }
 
-function setEntityProfile(entityId, { displayName, photoUrl }) {
+function setEntityProfile(entityId, { displayName, photoUrl, sigilParams }) {
   const entities = readJSON(KEYS.ENTITIES, {});
   if (!entities[entityId]) return null;
   if (displayName !== undefined) entities[entityId].displayName = displayName;
   if (photoUrl !== undefined) entities[entityId].photoUrl = photoUrl;
+  if (sigilParams !== undefined) entities[entityId].sigilParams = sigilParams;
   writeJSON(KEYS.ENTITIES, entities);
   return entities[entityId];
 }

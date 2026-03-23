@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Whisper — Your quiet room awaits</title>
+  <title>Whisper — Craft your sigil</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
@@ -13,17 +13,13 @@
       theme: {
         extend: {
           colors: {
-            bg: '#0f0f0f',
-            surface: '#1a1a1a',
-            text: '#e8e4dc',
-            muted: '#6b6762',
-            sage: '#8A9A5B',
-            rose: '#E5C1CD',
-            gold: '#C9A84C',
+            bg: '#0f0f0f', surface: '#1a1a1a',
+            text: '#e8e4dc', muted: '#6b6762',
+            sage: '#8A9A5B', rose: '#E5C1CD', gold: '#C9A84C',
           },
           fontFamily: {
             serif: ['"Playfair Display"', 'Georgia', 'serif'],
-            sans: ['Inter', 'system-ui', 'sans-serif'],
+            sans:  ['Inter', 'system-ui', 'sans-serif'],
           },
         }
       }
@@ -31,13 +27,76 @@
   </script>
   <link rel="stylesheet" href="css/whisper.css" />
   <style>
-    .photo-upload-ring {
-      border: 1.5px dashed rgba(138,154,91,0.25);
-      transition: border-color 0.3s ease, background 0.3s ease;
+    /* Control pill buttons */
+    .ctrl-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: #6b6762;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .photo-upload-ring:hover {
+    .ctrl-btn:hover { border-color: rgba(255,255,255,0.2); color: #e8e4dc; }
+    .ctrl-btn.control-active {
       border-color: rgba(138,154,91,0.5);
-      background: rgba(138,154,91,0.04);
+      background: rgba(138,154,91,0.1);
+      color: #8A9A5B;
+    }
+
+    /* Palette swatches */
+    .palette-swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s ease, transform 0.15s ease;
+    }
+    .palette-swatch:hover { transform: scale(1.15); }
+    .palette-swatch.palette-active {
+      border-color: rgba(255,255,255,0.5);
+      transform: scale(1.15);
+    }
+
+    /* Rotation slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      outline: none;
+      border-radius: 2px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #8A9A5B;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    input[type=range]:hover::-webkit-slider-thumb { opacity: 1; }
+
+    /* Photo upload */
+    .photo-ring {
+      border: 1.5px dashed rgba(138,154,91,0.2);
+      transition: border-color 0.3s ease;
+    }
+    .photo-ring:hover { border-color: rgba(138,154,91,0.45); }
+
+    /* Sigil preview ring */
+    .sigil-ring {
+      border: 1px solid rgba(255,255,255,0.04);
+      transition: border-color 0.4s ease;
     }
   </style>
 </head>
@@ -45,93 +104,176 @@
 
   <!-- Ambient orb -->
   <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-    <div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full"
-         style="background: radial-gradient(circle, #8A9A5B 0%, transparent 70%); opacity: 0.025;"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+         style="background: radial-gradient(circle, #8A9A5B 0%, transparent 65%); opacity: 0.025;"></div>
   </div>
 
   <main class="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-16">
+    <div class="w-full max-w-sm space-y-10">
 
-    <div class="w-full max-w-sm">
-
-      <!-- Sigil mark -->
-      <div class="flex justify-center mb-8">
-        <div id="onboard-sigil" class="opacity-60"></div>
-      </div>
-
-      <!-- Heading -->
-      <div class="text-center mb-10">
-        <h1 class="font-serif text-3xl text-text font-normal mb-3" style="letter-spacing: -0.01em;">
-          Your quiet room awaits.
+      <!-- Top: name entry -->
+      <div class="text-center space-y-5">
+        <h1 class="font-serif text-3xl text-text font-normal" style="letter-spacing: -0.01em;">
+          Craft your sigil.
         </h1>
         <p class="text-muted text-sm font-light leading-relaxed">
-          Before you enter — what shall we call you?
+          Your sigil is your entity — the mark that carries your name into the quiet.
         </p>
+        <input
+          id="name-input"
+          type="text"
+          placeholder="what shall we call you?"
+          autocomplete="name"
+          autocorrect="off"
+          maxlength="60"
+          class="email-input-glow w-full bg-surface border border-transparent rounded-2xl px-5 py-4 text-text placeholder-muted font-sans font-light text-base focus:border-sage/20 transition-all text-center"
+          style="background: rgba(26,26,26,0.8);"
+        />
       </div>
 
-      <form id="onboard-form" class="space-y-8" novalidate>
+      <!-- Sigil designer -->
+      <div class="space-y-6">
 
-        <!-- Name -->
-        <div>
-          <input
-            id="name-input"
-            type="text"
-            placeholder="your name"
-            autocomplete="name"
-            autocorrect="off"
-            maxlength="60"
-            class="email-input-glow w-full bg-surface border border-transparent rounded-2xl px-5 py-4 text-text placeholder-muted font-sans font-light text-base focus:border-sage/20 transition-all text-center"
-            style="background: rgba(26,26,26,0.8);"
-          />
-          <p class="text-muted/40 text-xs text-center mt-2 font-light">This is how people will know whose room they're visiting.</p>
+        <!-- Live preview -->
+        <div class="flex flex-col items-center gap-4">
+          <div
+            id="sigil-preview"
+            class="sigil-ring w-40 h-40 rounded-full flex items-center justify-center"
+            style="background: rgba(26,26,26,0.4);"
+          >
+            <!-- rendered by app.js -->
+          </div>
+          <button
+            id="shuffle-btn"
+            type="button"
+            class="text-muted/50 text-xs font-light tracking-widest uppercase hover:text-muted transition-colors flex items-center gap-1.5"
+          >
+            <span style="font-size: 14px;">↻</span> shuffle
+          </button>
         </div>
 
-        <!-- Photo upload (optional) -->
-        <div class="text-center">
-          <p class="text-muted text-xs uppercase tracking-widest mb-4">A face, if you wish</p>
+        <!-- Controls -->
+        <div class="bg-surface rounded-2xl p-5 space-y-5" style="border: 1px solid rgba(255,255,255,0.04);">
 
-          <label for="photo-input" class="cursor-pointer block">
-            <div class="relative w-24 h-24 rounded-full mx-auto photo-upload-ring flex items-center justify-center overflow-hidden"
-                 style="background: rgba(26,26,26,0.6);">
-              <img
-                id="photo-preview"
-                src=""
-                alt="Your photo"
-                class="hidden w-full h-full object-cover rounded-full"
-              />
-              <div id="photo-placeholder" class="text-center px-2">
-                <div class="text-muted/40 text-xl mb-1">+</div>
-                <span class="text-muted/40 text-xs font-light">photo</span>
-              </div>
+          <!-- Form (polygon sides) -->
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs tracking-wide w-16">Form</span>
+            <div class="flex gap-2">
+              <!-- Triangle -->
+              <button type="button" class="ctrl-btn" data-sides="3" title="Triangle">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <polygon points="6,1 11,11 1,11" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                </svg>
+              </button>
+              <!-- Square -->
+              <button type="button" class="ctrl-btn" data-sides="4" title="Square">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <rect x="1.5" y="1.5" width="9" height="9" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                </svg>
+              </button>
+              <!-- Pentagon -->
+              <button type="button" class="ctrl-btn" data-sides="5" title="Pentagon">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <polygon points="6,1 11,4.5 9,10.5 3,10.5 1,4.5" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                </svg>
+              </button>
+              <!-- Hexagon -->
+              <button type="button" class="ctrl-btn" data-sides="6" title="Hexagon">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <polygon points="6,1 10.5,3.5 10.5,8.5 6,11 1.5,8.5 1.5,3.5" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                </svg>
+              </button>
             </div>
-          </label>
+          </div>
 
-          <input
-            id="photo-input"
-            type="file"
-            accept="image/*"
-            class="sr-only"
-          />
+          <!-- Rings -->
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs tracking-wide w-16">Rings</span>
+            <div class="flex gap-2">
+              <button type="button" class="ctrl-btn" data-rings="2">2</button>
+              <button type="button" class="ctrl-btn" data-rings="3">3</button>
+              <button type="button" class="ctrl-btn" data-rings="4">4</button>
+            </div>
+          </div>
 
-          <p class="text-muted/30 text-xs mt-3 font-light">Optional. Stored only on your device for now.</p>
+          <!-- Lines -->
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs tracking-wide w-16">Lines</span>
+            <div class="flex gap-2">
+              <button type="button" class="ctrl-btn" data-lines="3">3</button>
+              <button type="button" class="ctrl-btn" data-lines="4">4</button>
+              <button type="button" class="ctrl-btn" data-lines="5">5</button>
+              <button type="button" class="ctrl-btn" data-lines="6">6</button>
+              <button type="button" class="ctrl-btn" data-lines="7">7</button>
+            </div>
+          </div>
+
+          <!-- Palette -->
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs tracking-wide w-16">Tone</span>
+            <div class="flex gap-3 items-center">
+              <button type="button" class="palette-swatch" data-hue="85"
+                style="background: #8A9A5B;" title="Sage"></button>
+              <button type="button" class="palette-swatch" data-hue="22"
+                style="background: #C97A3A;" title="Ember"></button>
+              <button type="button" class="palette-swatch" data-hue="265"
+                style="background: #8A6EC9;" title="Dusk"></button>
+              <button type="button" class="palette-swatch" data-hue="345"
+                style="background: #C96E8A;" title="Rose"></button>
+              <button type="button" class="palette-swatch" data-hue="205"
+                style="background: #5B8FA0;" title="Glacial"></button>
+            </div>
+          </div>
+
+          <!-- Rotation -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-muted text-xs tracking-wide">Rotation</span>
+              <span class="text-muted/40 text-xs font-light">drag to turn</span>
+            </div>
+            <input
+              id="rotation-slider"
+              type="range"
+              min="0"
+              max="359"
+              value="0"
+              class="w-full"
+            />
+          </div>
+
         </div>
+      </div>
 
-        <!-- Submit -->
+      <!-- Optional photo -->
+      <div class="text-center space-y-3">
+        <p class="text-muted/50 text-xs uppercase tracking-widest">A face, if you wish</p>
+        <label for="photo-input" class="cursor-pointer inline-block">
+          <div class="relative w-16 h-16 rounded-full mx-auto photo-ring flex items-center justify-center overflow-hidden"
+               style="background: rgba(26,26,26,0.6);">
+            <img id="photo-preview" src="" alt="" class="hidden w-full h-full object-cover rounded-full" />
+            <div id="photo-placeholder" class="text-muted/30 text-lg">+</div>
+          </div>
+        </label>
+        <input id="photo-input" type="file" accept="image/*" class="sr-only" />
+        <p class="text-muted/25 text-xs font-light">Optional. Stored on your device.</p>
+      </div>
+
+      <!-- Submit -->
+      <form id="onboard-form" novalidate>
         <button
           id="onboard-submit"
           type="submit"
           disabled
-          class="w-full py-4 rounded-2xl font-sans font-normal text-sm tracking-widest uppercase transition-all duration-300 disabled:opacity-30"
+          class="w-full py-4 rounded-2xl font-sans font-normal text-sm tracking-widest uppercase transition-all duration-300 disabled:opacity-25"
           style="background: rgba(138,154,91,0.1); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2); letter-spacing: 0.12em;"
           onmouseover="if(!this.disabled) this.style.background='rgba(138,154,91,0.18)'"
           onmouseout="this.style.background='rgba(138,154,91,0.1)'"
         >
-          Step into the silence
+          Claim your sigil
         </button>
-
       </form>
 
     </div>
-
   </main>
 
   <script type="module" src="js/app.js"></script>

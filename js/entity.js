@@ -39,69 +39,59 @@ function generateTrustToken() {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Generate a deterministic sigil SVG from hash
-function generateSigil(hash, size = 80) {
-  // Parse hash segments into design parameters
-  const seg = (start, len) => parseInt(hash.substring(start, start + len), 16);
-
-  const numRings = 2 + (seg(0, 2) % 3);       // 2–4 rings
-  const numLines = 3 + (seg(2, 2) % 5);       // 3–7 lines
-  const rotation = (seg(4, 2) / 255) * 360;   // 0–360 deg
-  const innerRatio = 0.3 + (seg(6, 2) / 255) * 0.25; // 0.3–0.55
-
-  // Colours from hash
-  const hue1 = seg(8, 3) % 360;
-  const hue2 = (hue1 + 137) % 360; // golden angle offset
-
+// Generate sigil SVG from explicit params
+function generateSigilFromParams({ rings, lines, rotation, innerRatio, sides, hue }, size = 80) {
+  const hue2 = (hue + 137) % 360;
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.42;
+  const parts = [];
 
-  let svgParts = [];
-
-  // Rings
-  for (let i = 0; i < numRings; i++) {
-    const r = maxR * ((i + 1) / numRings);
-    const opacity = 0.25 + (i / numRings) * 0.35;
-    const hue = (hue1 + i * 40) % 360;
-    svgParts.push(
-      `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}" fill="none" stroke="hsl(${hue},40%,65%)" stroke-width="0.8" opacity="${opacity.toFixed(2)}"/>`
-    );
+  for (let i = 0; i < rings; i++) {
+    const r = maxR * ((i + 1) / rings);
+    const opacity = (0.25 + (i / rings) * 0.35).toFixed(2);
+    const h = (hue + i * 40) % 360;
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}" fill="none" stroke="hsl(${h},40%,65%)" stroke-width="0.8" opacity="${opacity}"/>`);
   }
 
-  // Radiating lines
-  for (let i = 0; i < numLines; i++) {
-    const angle = rotation + (i / numLines) * 360;
-    const rad = (angle * Math.PI) / 180;
-    const x1 = cx + Math.cos(rad) * maxR * innerRatio;
-    const y1 = cy + Math.sin(rad) * maxR * innerRatio;
-    const x2 = cx + Math.cos(rad) * maxR;
-    const y2 = cy + Math.sin(rad) * maxR;
-    const hue = (hue2 + i * 25) % 360;
-    svgParts.push(
-      `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="hsl(${hue},35%,60%)" stroke-width="0.7" opacity="0.5"/>`
-    );
+  for (let i = 0; i < lines; i++) {
+    const angle = rotation + (i / lines) * 360;
+    const rad = angle * Math.PI / 180;
+    const x1 = (cx + Math.cos(rad) * maxR * innerRatio).toFixed(2);
+    const y1 = (cy + Math.sin(rad) * maxR * innerRatio).toFixed(2);
+    const x2 = (cx + Math.cos(rad) * maxR).toFixed(2);
+    const y2 = (cy + Math.sin(rad) * maxR).toFixed(2);
+    const h = (hue2 + i * 25) % 360;
+    parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="hsl(${h},35%,60%)" stroke-width="0.7" opacity="0.5"/>`);
   }
 
-  // Central polygon (triangle, square, pentagon, or hexagon based on hash)
-  const sides = 3 + (seg(10, 2) % 4); // 3–6 sides
   const polyR = maxR * innerRatio * 0.8;
-  const polyAngle = (seg(12, 2) / 255) * 360;
-  const polyPoints = [];
-  for (let i = 0; i < sides; i++) {
-    const a = ((polyAngle + (i / sides) * 360) * Math.PI) / 180;
-    polyPoints.push(`${(cx + Math.cos(a) * polyR).toFixed(2)},${(cy + Math.sin(a) * polyR).toFixed(2)}`);
-  }
-  svgParts.push(
-    `<polygon points="${polyPoints.join(' ')}" fill="none" stroke="hsl(${hue1},45%,70%)" stroke-width="0.9" opacity="0.6"/>`
-  );
+  const polyPoints = Array.from({ length: sides }, (_, i) => {
+    const a = (rotation + (i / sides) * 360) * Math.PI / 180;
+    return `${(cx + Math.cos(a) * polyR).toFixed(2)},${(cy + Math.sin(a) * polyR).toFixed(2)}`;
+  });
+  parts.push(`<polygon points="${polyPoints.join(' ')}" fill="none" stroke="hsl(${hue},45%,70%)" stroke-width="0.9" opacity="0.6"/>`);
+  parts.push(`<circle cx="${cx}" cy="${cy}" r="1.5" fill="hsl(${hue2},50%,70%)" opacity="0.8"/>`);
 
-  // Central dot
-  svgParts.push(
-    `<circle cx="${cx}" cy="${cy}" r="1.5" fill="hsl(${hue2},50%,70%)" opacity="0.8"/>`
-  );
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgParts.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${parts.join('')}</svg>`;
 }
 
-export { hashEmail, getGhostName, generateTrustToken, generateSigil };
+// Default params seeded from hash (used when no custom params stored)
+function defaultSigilParams(hash) {
+  const seg = (s, l) => parseInt(hash.substring(s, s + l), 16);
+  return {
+    rings:      2 + (seg(0, 2) % 3),
+    lines:      3 + (seg(2, 2) % 5),
+    rotation:   Math.round((seg(4, 2) / 255) * 360),
+    innerRatio: parseFloat((0.3 + (seg(6, 2) / 255) * 0.25).toFixed(3)),
+    sides:      3 + (seg(10, 2) % 4),
+    hue:        seg(8, 3) % 360,
+  };
+}
+
+// Generate sigil from hash (delegates to generateSigilFromParams)
+function generateSigil(hash, size = 80, storedParams = null) {
+  return generateSigilFromParams(storedParams || defaultSigilParams(hash), size);
+}
+
+export { hashEmail, getGhostName, generateTrustToken, generateSigil, generateSigilFromParams, defaultSigilParams };
