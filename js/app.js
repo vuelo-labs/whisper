@@ -78,10 +78,6 @@ async function initOnboard() {
   const current = getCurrentEntity();
   if (!current) { window.location.href = 'index.html'; return; }
 
-  const entity = await getEntity(current.entityId);
-  if (!entity) { window.location.href = 'index.html'; return; }
-  if (entity.displayName) { window.location.href = 'dashboard.html'; return; }
-
   const form = document.getElementById('onboard-form');
   const nameInput = document.getElementById('name-input');
   const photoInput = document.getElementById('photo-input');
@@ -216,13 +212,20 @@ async function initOnboard() {
       const photoUrl = (photoPreview && !photoPreview.classList.contains('hidden'))
         ? photoPreview.src : null;
 
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Claiming…'; }
+
+      // Validate entity exists before saving (deferred until submit)
+      const entity = await getEntity(current.entityId);
+      if (!entity) { window.location.href = 'index.html'; return; }
+      if (entity.displayName) { window.location.href = 'dashboard.html'; return; }
+
       await setEntityProfile(current.entityId, { displayName, photoUrl, sigilParams: params });
       setCurrentEntity({ ...current, displayName });
       window.location.href = 'dashboard.html';
     });
   }
 
-  // Initial render
+  // Render immediately — no async gate
   renderPreview();
   updateActiveControls();
 }
