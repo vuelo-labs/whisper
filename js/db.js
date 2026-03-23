@@ -94,7 +94,8 @@ export async function addWhisper({ recipientId, senderId, senderGhost, text, adm
 
 export async function getInboard(entityId) {
   if (!isRemote) return local.getInboard(entityId);
-  return get(`/whispers/${entityId}`, currentToken());
+  try { return await get(`/whispers/${entityId}`, currentToken()); }
+  catch { return []; }
 }
 
 export async function getIntegratedWhispers(entityId) {
@@ -132,7 +133,8 @@ export async function logOutbound({ senderId, senderGhost, recipientId, recipien
 
 export async function getOutboard(entityId) {
   if (!isRemote) return local.getOutboard(entityId);
-  return get(`/outboard/${entityId}`, currentToken());
+  try { return await get(`/outboard/${entityId}`, currentToken()); }
+  catch { return []; }
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

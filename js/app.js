@@ -268,25 +268,24 @@ async function initDashboard() {
     });
   }
 
-  // Note count
-  await renderNoteCount(current.entityId, entity);
-
   // Share buttons
   const shareBtn = document.getElementById('share-btn');
   const trustBtn = document.getElementById('trust-btn');
   const copyFeedback = document.getElementById('copy-feedback');
 
+  const baseUrl = `${window.location.origin}${window.location.pathname.replace('dashboard.html', '')}`;
+
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
-      const url = `${window.location.origin}${window.location.pathname.replace('dashboard.html', '')}room.html?id=${current.entityId}`;
-      navigator.clipboard.writeText(url).then(() => showCopyFeedback(copyFeedback, 'Room link copied to the ether.'));
+      const url = `${baseUrl}room.html?id=${current.entityId}`;
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Room link copied to the ether.'));
     });
   }
 
   if (trustBtn) {
     trustBtn.addEventListener('click', () => {
-      const url = `${window.location.origin}${window.location.pathname.replace('dashboard.html', '')}room.html?id=${current.entityId}&trust=${entity.trustToken}`;
-      navigator.clipboard.writeText(url).then(() => showCopyFeedback(copyFeedback, 'Trust link copied. Share with care.'));
+      const url = `${baseUrl}room.html?id=${current.entityId}&trust=${entity.trustToken}`;
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Trust link copied. Share with care.'));
     });
   }
 
@@ -320,17 +319,18 @@ async function initDashboard() {
       if (confirm('Clear all integrated whispers from your board? They will be released.')) {
         await clearBoard(current.entityId);
         await renderInboard(current.entityId);
-        await renderNoteCount(current.entityId, await getEntity(current.entityId));
+        await renderNoteCount(current.entityId);
       }
     });
   }
 
-  // Render inboard
+  // Render data (async — must not block event listener wiring above)
+  await renderNoteCount(current.entityId);
   await renderInboard(current.entityId);
   await renderOutboard(current.entityId);
 }
 
-async function renderNoteCount(entityId, entity) {
+async function renderNoteCount(entityId) {
   const countEl = document.getElementById('note-count');
   if (!countEl) return;
   const inboard = await getInboard(entityId);
@@ -430,7 +430,7 @@ async function handleIntegrate(whisperId, entityId) {
   if (card) card.classList.add('dissolving');
   setTimeout(async () => {
     await renderInboard(entityId);
-    await renderNoteCount(entityId, await getEntity(entityId));
+    await renderNoteCount(entityId);
   }, 1300);
 }
 
@@ -443,7 +443,7 @@ async function handleRelease(whisperId, entityId) {
   }
   setTimeout(async () => {
     await renderInboard(entityId);
-    await renderNoteCount(entityId, await getEntity(entityId));
+    await renderNoteCount(entityId);
   }, 1300);
 }
 
@@ -942,6 +942,31 @@ function showAnchorOverlay(message, callback) {
       if (callback) callback();
     }, 600);
   }, 1500);
+}
+
+function copyToClipboard(text, onSuccess) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+      // Fallback for HTTP or blocked clipboard
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      onSuccess();
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    onSuccess();
+  }
 }
 
 function showCopyFeedback(el, message) {
