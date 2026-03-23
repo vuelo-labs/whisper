@@ -13,13 +13,13 @@ import {
 
 // Detect current page
 const page = (() => {
-  const path = window.location.pathname.replace(/\.html$/, '');
-  if (path === '/' || path.endsWith('/index') || path.endsWith('/whisper')) return 'index';
-  if (path.endsWith('/onboard')) return 'onboard';
+  const path = window.location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+  if (path === '/' || path === '/index' || path.endsWith('/whisper')) return 'index';
+  if (path.endsWith('/onboard'))   return 'onboard';
   if (path.endsWith('/dashboard')) return 'dashboard';
-  if (path.endsWith('/room')) return 'room';
-  if (path.endsWith('/compose')) return 'compose';
-  return 'index';
+  if (path.endsWith('/room'))      return 'room';
+  if (path.endsWith('/compose'))   return 'compose';
+  return 'unknown';
 })();
 
 // --- INDEX PAGE ---
@@ -288,7 +288,7 @@ async function initDashboard() {
   if (trustBtn) {
     trustBtn.addEventListener('click', () => {
       const url = `${baseUrl}room.html?id=${current.entityId}&trust=${entity.trustToken}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Trust link copied. Share with care.'));
+      copyToClipboard(url, () => showCopyFeedback(copyFeedback, `Copied: ${url}`));
     });
   }
 
