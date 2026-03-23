@@ -1,250 +1,148 @@
-// db.js — Supabase client + data access layer
-// Mirrors the storage.js API exactly so app.js can swap seamlessly.
-// Falls back to storage.js (localStorage) when SUPABASE_URL is empty.
+// db.js — Data access layer
+// Uses the /api/* Pages Function (Cloudflare D1) when deployed.
+// Falls back to localStorage (storage.js) when running locally without a Worker.
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import * as local from './storage.js';
 
-// ── Client ────────────────────────────────────────────────────────────────────
+// ── Remote detection ──────────────────────────────────────────────────────────
+// In production the Pages Function is on the same origin at /api/*.
+// Locally (python3 -m http.server) there's no Worker, so we use localStorage.
 
-let _sb = null;
+export const isRemote = !(
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+);
 
-function sb() {
-  if (!_sb) {
-    const { createClient } = window.supabase;
-    _sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-  return _sb;
+const API = '/api';
+
+// Current entity always lives in localStorage (session state)
+export const getCurrentEntity   = local.getCurrentEntity;
+export const setCurrentEntity   = local.setCurrentEntity;
+export const clearCurrentEntity = local.clearCurrentEntity;
+
+// ── Auth header ───────────────────────────────────────────────────────────────
+// Pass the entity's trust_token as a Bearer token for owner-only operations.
+
+function authHeader(trustToken) {
+  return trustToken ? { Authorization: `Bearer ${trustToken}` } : {};
 }
 
-export const isRemote = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+function currentToken() {
+  const e = local.getCurrentEntity();
+  return e?.trustToken || '';
+}
 
-// Set entity context so RLS policies can identify the caller
-async function setContext(entityId) {
-  if (!entityId) return;
-  await sb().rpc('set_config', {
-    setting: 'app.eid',
-    value: entityId,
-    is_local: true,
-  }).catch(() => {}); // non-fatal if rpc not available
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
+
+async function get(path, token) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function post(path, data, token) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function patch(path, data, token) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
 // ── Entities ──────────────────────────────────────────────────────────────────
 
 export async function createEntity({ entityId, ghostName, trustToken }) {
   if (!isRemote) return local.createEntity({ entityId, ghostName, trustToken });
-
-  const row = {
-    entity_id:   entityId,
-    ghost_name:  ghostName,
-    trust_token: trustToken,
-  };
-  const { data, error } = await sb().from('entities').upsert(row).select().single();
-  if (error) throw error;
-  return remapEntity(data);
+  return post('/entity', { entityId, ghostName, trustToken });
 }
 
 export async function getEntity(entityId) {
   if (!isRemote) return local.getEntity(entityId);
-
-  const { data } = await sb().from('entities').select('*').eq('entity_id', entityId).maybeSingle();
-  return data ? remapEntity(data) : null;
+  try { return await get(`/entity/${entityId}`); }
+  catch { return null; }
 }
 
 export async function setEntityProfile(entityId, { displayName, photoUrl, sigilParams }) {
   if (!isRemote) return local.setEntityProfile(entityId, { displayName, photoUrl, sigilParams });
-
-  await setContext(entityId);
-  const update = {};
-  if (displayName  !== undefined) update.display_name  = displayName;
-  if (photoUrl     !== undefined) update.photo_url     = photoUrl;
-  if (sigilParams  !== undefined) update.sigil_params  = sigilParams;
-
-  const { data, error } = await sb().from('entities').update(update)
-    .eq('entity_id', entityId).select().single();
-  if (error) throw error;
-  return remapEntity(data);
+  return patch(`/entity/${entityId}`, { displayName, photoUrl, sigilParams }, currentToken());
 }
 
 export async function updateEntity(entityId, updates) {
   if (!isRemote) return local.updateEntity(entityId, updates);
-
-  await setContext(entityId);
-  const dbUpdates = {};
-  if (updates.expiry    !== undefined) dbUpdates.expiry    = updates.expiry;
-  if (updates.noteCount !== undefined) dbUpdates.note_count = updates.noteCount;
-
-  const { data, error } = await sb().from('entities').update(dbUpdates)
-    .eq('entity_id', entityId).select().single();
-  if (error) throw error;
-  return remapEntity(data);
+  return patch(`/entity/${entityId}`, updates, currentToken());
 }
-
-// Current entity lives in localStorage regardless of backend
-export const getCurrentEntity  = local.getCurrentEntity;
-export const setCurrentEntity  = local.setCurrentEntity;
-export const clearCurrentEntity = local.clearCurrentEntity;
 
 // ── Whispers ──────────────────────────────────────────────────────────────────
 
 export async function addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish }) {
   if (!isRemote) return local.addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish });
-
-  const row = {
-    recipient_id: recipientId,
-    sender_id:    senderId,
-    sender_ghost: senderGhost,
-    text,
-    admire:    admire    || null,
-    appreciate: appreciate || null,
-    wish:      wish      || null,
-    status:    'antechamber',
-  };
-  const { data, error } = await sb().from('whispers').insert(row).select().single();
-  if (error) throw error;
-  return remapWhisper(data);
+  return post('/whisper', { recipientId, senderId, senderGhost, text, admire, appreciate, wish });
 }
 
 export async function getInboard(entityId) {
   if (!isRemote) return local.getInboard(entityId);
-
-  await setContext(entityId);
-  const { data, error } = await sb().from('whispers')
-    .select('*')
-    .eq('recipient_id', entityId)
-    .in('status', ['antechamber', 'integrated'])
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(remapWhisper);
+  return get(`/whispers/${entityId}`, currentToken());
 }
 
 export async function getIntegratedWhispers(entityId) {
   if (!isRemote) return local.getIntegratedWhispers(entityId);
-
-  const { data, error } = await sb().from('whispers')
-    .select('*')
-    .eq('recipient_id', entityId)
-    .eq('status', 'integrated')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(remapWhisper);
+  return get(`/whispers/${entityId}/public`);
 }
 
 export async function integrateWhisper(recipientId, whisperId) {
   if (!isRemote) return local.integrateWhisper(recipientId, whisperId);
-
-  await setContext(recipientId);
-  const { error } = await sb().from('whispers').update({ status: 'integrated' })
-    .eq('id', whisperId).eq('recipient_id', recipientId);
-  if (error) throw error;
+  return patch(`/whisper/${whisperId}`, { status: 'integrated', recipientId }, currentToken());
 }
 
 export async function releaseWhisper(recipientId, whisperId) {
   if (!isRemote) return local.releaseWhisper(recipientId, whisperId);
-
-  await setContext(recipientId);
-  const { error } = await sb().from('whispers').update({ status: 'released' })
-    .eq('id', whisperId).eq('recipient_id', recipientId);
-  if (error) throw error;
+  return patch(`/whisper/${whisperId}`, { status: 'released', recipientId }, currentToken());
 }
 
 export async function clearBoard(entityId) {
   if (!isRemote) return local.clearBoard(entityId);
-
-  await setContext(entityId);
-  const { error } = await sb().from('whispers').update({ status: 'released' })
-    .eq('recipient_id', entityId).eq('status', 'integrated');
-  if (error) throw error;
+  return post(`/board/${entityId}/clear`, {}, currentToken());
 }
 
 export async function isBoardFull(entityId) {
   if (!isRemote) return local.isBoardFull(entityId);
-
-  const { count, error } = await sb().from('whispers')
-    .select('*', { count: 'exact', head: true })
-    .eq('recipient_id', entityId)
-    .in('status', ['antechamber', 'integrated']);
-  if (error) return false;
-  return (count || 0) >= 100;
+  const { full } = await get(`/board/${entityId}/full`);
+  return full;
 }
 
 // ── Outbound log ──────────────────────────────────────────────────────────────
 
 export async function logOutbound({ senderId, senderGhost, recipientId, recipientGhost, text, status = 'sent' }) {
   if (!isRemote) return local.logOutbound({ senderId, senderGhost, recipientId, recipientGhost, text, status });
-
-  const row = { sender_id: senderId, recipient_id: recipientId, recipient_ghost: recipientGhost, text, status };
-  const { data, error } = await sb().from('outbound_log').insert(row).select().single();
-  if (error) throw error;
-  return remapOutbound(data);
+  return post('/outboard', { senderId, recipientId, recipientGhost, text, status });
 }
 
 export async function getOutboard(entityId) {
   if (!isRemote) return local.getOutboard(entityId);
-
-  await setContext(entityId);
-  const { data, error } = await sb().from('outbound_log')
-    .select('*').eq('sender_id', entityId).order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(remapOutbound);
+  return get(`/outboard/${entityId}`, currentToken());
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 
 export async function checkRateLimit(senderId) {
   if (!isRemote) return local.checkRateLimit(senderId);
-
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { count } = await sb().from('rate_limits')
-    .select('*', { count: 'exact', head: true })
-    .eq('sender_id', senderId).gte('sent_at', cutoff);
-  return { count: count || 0, exceeded: (count || 0) >= 3 };
+  return get(`/rate/${senderId}`);
 }
 
 export async function incrementRateLimit(senderId) {
   if (!isRemote) return local.incrementRateLimit(senderId);
-
-  await sb().from('rate_limits').insert({ sender_id: senderId });
-}
-
-// ── Remappers: snake_case DB → camelCase app ──────────────────────────────────
-
-function remapEntity(r) {
-  return {
-    entityId:    r.entity_id,
-    ghostName:   r.ghost_name,
-    displayName: r.display_name  || null,
-    photoUrl:    r.photo_url     || null,
-    sigilParams: r.sigil_params  || null,
-    trustToken:  r.trust_token,
-    expiry:      r.expiry,
-    noteCount:   r.note_count,
-    createdAt:   r.created_at,
-  };
-}
-
-function remapWhisper(r) {
-  return {
-    id:          r.id,
-    recipientId: r.recipient_id,
-    senderId:    r.sender_id,
-    senderGhost: r.sender_ghost,
-    text:        r.text,
-    admire:      r.admire      || '',
-    appreciate:  r.appreciate  || '',
-    wish:        r.wish        || '',
-    status:      r.status,
-    createdAt:   r.created_at,
-  };
-}
-
-function remapOutbound(r) {
-  return {
-    id:             r.id,
-    recipientId:    r.recipient_id,
-    recipientGhost: r.recipient_ghost,
-    text:           r.text,
-    status:         r.status,
-    createdAt:      r.created_at,
-  };
+  return post(`/rate/${senderId}`, {});
 }

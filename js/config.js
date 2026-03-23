@@ -1,6 +1,3 @@
-// config.js — Supabase credentials
-// Fill these in once your Supabase project is created.
-// Dashboard → Project Settings → API
-
-export const SUPABASE_URL      = '';   // e.g. 'https://xyzxyzxyz.supabase.co'
-export const SUPABASE_ANON_KEY = '';   // 'eyJ...' (anon / public key)
+// config.js — kept for reference, no longer needed.
+// The app talks to the Cloudflare Pages Function at /api/*
+// which is co-deployed with the site. No credentials required.
