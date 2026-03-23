@@ -324,6 +324,17 @@ async function initDashboard() {
     return;
   }
 
+  // Broken session: token was wiped by a previous bug — prompt recovery
+  if (!current.trustToken) {
+    document.body.innerHTML = `
+      <div class="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6">
+        <p class="font-serif text-text text-xl italic">Your session needs refreshing.</p>
+        <p class="text-muted text-sm font-light max-w-xs leading-relaxed">Re-enter your email and your room will be restored.</p>
+        <a href="index.html" class="text-sage text-sm hover:underline">← Go back</a>
+      </div>`;
+    return;
+  }
+
   const entity = await getEntity(current.entityId);
   if (!entity) {
     window.location.href = 'index.html';
@@ -403,7 +414,7 @@ async function initDashboard() {
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
       const url = `${baseUrl}room.html?id=${current.entityId}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Link copied. Sharing this takes courage.'));
+      showLinkFeedback(copyFeedback, url, 'Sharing this takes courage.');
     });
   }
 
@@ -414,9 +425,9 @@ async function initDashboard() {
       const invite = await createInviteLink(current.entityId);
       trustBtn.disabled = false;
       trustBtn.textContent = 'Generate invite link';
-      if (!invite?.id) { showCopyFeedback(copyFeedback, 'Could not create link.'); return; }
+      if (!invite?.id) { showLinkFeedback(copyFeedback, null, 'Could not create link. Try re-entering your email to restore your session.'); return; }
       const url = `${baseUrl}room.html?id=${current.entityId}&invite=${invite.id}`;
-      copyToClipboard(url, () => showCopyFeedback(copyFeedback, 'Invite link copied. Sharing this means you\'re ready to hear what they see.'));
+      showLinkFeedback(copyFeedback, url, 'Ready to hear what they see.');
     });
   }
 
@@ -590,11 +601,14 @@ async function renderInboard(entityId) {
     </div>`;
   }
 
-  if (antechamber.length > 0) {
-    html += `<div class="mb-8">
-      <h3 class="text-xs uppercase tracking-widest text-muted mb-1">Antechamber — ${antechamber.length} waiting</h3>
-      <p class="text-muted/40 text-xs font-light mb-4">whispers wait here until you're ready to open them</p>
-      <div class="space-y-3">`;
+  // Antechamber — always visible so people know it exists
+  html += `<div class="mb-8">
+    <h3 class="text-xs uppercase tracking-widest text-muted mb-1">Antechamber${antechamber.length > 0 ? ` — ${antechamber.length} waiting` : ''}</h3>
+    <p class="text-muted/40 text-xs font-light mb-4">whispers from others wait here until you're ready to open them</p>
+    <div class="space-y-3">`;
+  if (antechamber.length === 0) {
+    html += `<p class="text-muted/30 text-sm font-serif italic py-4">Quiet for now. Share your room and whispers will arrive here.</p>`;
+  } else {
     antechamber.forEach(w => {
       const drift = driftTime(w.createdAt, entityExpiry);
       html += `<div class="fog-card bg-surface rounded-2xl p-5 relative" id="whisper-${w.id}">
@@ -617,8 +631,8 @@ async function renderInboard(entityId) {
         </div>
       </div>`;
     });
-    html += `</div></div>`;
   }
+  html += `</div></div>`;
 
   if (integrated.length > 0) {
     html += `<div>
@@ -1398,6 +1412,37 @@ function showCopyFeedback(el, message) {
   el.textContent = message;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+function showLinkFeedback(el, url, message) {
+  if (!el) return;
+  if (!url) {
+    el.innerHTML = `<p class="text-muted/60 text-xs text-center font-light italic py-1">${escapeHtml(message)}</p>`;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 5000);
+    return;
+  }
+  el.innerHTML = `
+    <p class="text-muted/50 text-xs text-center font-light italic mb-2">${escapeHtml(message)}</p>
+    <div class="flex gap-2 items-center" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 0.75rem; padding: 0.5rem 0.75rem;">
+      <input
+        type="text"
+        value="${escapeHtml(url)}"
+        readonly
+        class="flex-1 bg-transparent text-muted text-xs font-mono outline-none min-w-0"
+        style="cursor: text;"
+        onclick="this.select()"
+      />
+      <button
+        class="text-xs text-muted/60 hover:text-muted shrink-0 transition-colors font-sans"
+        style="padding: 0.1rem 0.4rem;"
+        onclick="navigator.clipboard && navigator.clipboard.writeText('${escapeHtml(url)}').then(()=>{ this.textContent='copied'; setTimeout(()=>{ this.textContent='copy'; },1500); }).catch(()=>{}); this.textContent='copy';"
+      >copy</button>
+    </div>`;
+  el.classList.remove('hidden');
+  // Auto-attempt clipboard on show
+  copyToClipboard(url, () => {});
+  setTimeout(() => el.classList.add('hidden'), 15000);
 }
 
 function escapeHtml(str) {

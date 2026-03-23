@@ -58,7 +58,7 @@ html {
 .fog-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(26, 26, 26, 0.6);
+  background: rgba(42, 35, 25, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   transition: all 0.8s ease;
@@ -184,7 +184,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(24, 20, 13, 0.88);
+  background: rgba(30, 25, 18, 0.92);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   opacity: 0;
@@ -219,7 +219,7 @@ html {
 
 /* ── Tab active state ── */
 .tab-active {
-  color: #e8e4dc !important;
+  color: #f0e6d0 !important;
   border-bottom-color: #8A9A5B !important;
 }
 
@@ -229,16 +229,16 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #18140d;
+  background: #1e1912;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2e2920;
+  background: #3a3125;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3e3830;
+  background: #4a4132;
 }
 
 /* ── Selection colour ── */
