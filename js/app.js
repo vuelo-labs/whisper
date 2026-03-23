@@ -276,7 +276,7 @@ async function initDashboard() {
   const trustBtn = document.getElementById('trust-btn');
   const copyFeedback = document.getElementById('copy-feedback');
 
-  const baseUrl = `${window.location.origin}${window.location.pathname.replace('dashboard.html', '')}`;
+  const baseUrl = `${window.location.origin}/`;
 
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
