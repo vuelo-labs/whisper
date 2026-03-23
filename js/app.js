@@ -13,13 +13,13 @@ import {
 
 // Detect current page
 const page = (() => {
-  const path = window.location.pathname;
-  if (path.endsWith('index.html') || path === '/' || path.endsWith('/whisper/')) return 'index';
-  if (path.endsWith('onboard.html')) return 'onboard';
-  if (path.endsWith('dashboard.html')) return 'dashboard';
-  if (path.endsWith('room.html')) return 'room';
-  if (path.endsWith('compose.html')) return 'compose';
-  return 'unknown';
+  const path = window.location.pathname.replace(/\.html$/, '');
+  if (path === '/' || path.endsWith('/index') || path.endsWith('/whisper')) return 'index';
+  if (path.endsWith('/onboard')) return 'onboard';
+  if (path.endsWith('/dashboard')) return 'dashboard';
+  if (path.endsWith('/room')) return 'room';
+  if (path.endsWith('/compose')) return 'compose';
+  return 'index';
 })();
 
 // --- INDEX PAGE ---
