@@ -1,5 +1,7 @@
 // storage.js — All localStorage CRUD operations for Whisper
 
+const ELLIS_ID = 'e111500000000000000000000000000000000000000000000000000000000000';
+
 const KEYS = {
   CURRENT_ENTITY: 'whisper_current_entity',
   ENTITIES: 'whisper_entities',
@@ -32,6 +34,7 @@ function generateId() {
 
 function createEntity({ entityId, ghostName, trustToken }) {
   const entities = readJSON(KEYS.ENTITIES, {});
+  if (entities[entityId]) return entities[entityId]; // existing — don't overwrite
   const entity = {
     entityId,
     ghostName,
@@ -43,11 +46,22 @@ function createEntity({ entityId, ghostName, trustToken }) {
     circleQuestionExpiresAt: null,
     roomOpenUntil: null,
     expiry: '24h',
-    noteCount: 0,
+    noteCount: 1,
     createdAt: new Date().toISOString(),
   };
   entities[entityId] = entity;
   writeJSON(KEYS.ENTITIES, entities);
+  // Welcome whisper from Ellis
+  addWhisper({
+    recipientId: entityId,
+    senderId: ELLIS_ID,
+    senderGhost: 'Ellis',
+    text: "You've opened your quiet room. Whatever arrives here is yours to hold or release. Take your time.",
+    admire: '', appreciate: '', wish: '',
+  });
+  // 1 starter token
+  const today = new Date().toISOString().slice(0, 10);
+  writeJSON(KEYS.tokens(entityId), { balance: 1, accrued_date: today });
   return entity;
 }
 
@@ -313,13 +327,23 @@ function resolveCircleRequest(ownerId, requestId, action) {
 
 function getTokenBalance(entityId) {
   const today = new Date().toISOString().slice(0, 10);
-  const ledger = readJSON(KEYS.tokens(entityId), { balance: 0, accrued_date: null });
+  const ledger = readJSON(KEYS.tokens(entityId), null);
+
+  if (!ledger) {
+    // No ledger yet — start with 1
+    writeJSON(KEYS.tokens(entityId), { balance: 1, accrued_date: today });
+    return 1;
+  }
 
   if (ledger.accrued_date === today) return ledger.balance;
 
-  const circleSize = getCircleWidth(entityId);
-  const toAdd = Math.min(circleSize, 5);
-  const newBalance = Math.min((ledger.balance || 0) + toAdd, 5);
+  // Real circle members = those who are not Ellis
+  const allMembers = readJSON(KEYS.circle(entityId), []);
+  const realCircleSize = allMembers.filter(id => id !== ELLIS_ID).length;
+
+  const toAdd = realCircleSize === 0 ? 1 : Math.min(realCircleSize, 5);
+  const maxBalance = realCircleSize === 0 ? 1 : 5;
+  const newBalance = Math.min((ledger.balance || 0) + toAdd, maxBalance);
   writeJSON(KEYS.tokens(entityId), { balance: newBalance, accrued_date: today });
   return newBalance;
 }

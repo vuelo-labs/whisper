@@ -359,7 +359,9 @@ async function initDashboard() {
   if (circleWidthEl) circleWidthEl.textContent = `In ${circlesIn} circle${circlesIn === 1 ? '' : 's'}`;
 
   const tokenBalanceEl = document.getElementById('token-balance');
-  if (tokenBalanceEl) tokenBalanceEl.textContent = `${tokenBalance} whisper${tokenBalance === 1 ? '' : 's'} today`;
+  if (tokenBalanceEl) tokenBalanceEl.textContent = tokenBalance === 0
+    ? 'no whispers left today'
+    : `${tokenBalance} whisper${tokenBalance === 1 ? '' : 's'} to give`;
 
   // Ellis prompt — shown when only Ellis is in the circle
   const ellisPromptEl = document.getElementById('ellis-prompt');
@@ -510,10 +512,12 @@ async function initDashboard() {
   if (ellisWarmBtn) {
     ellisWarmBtn.addEventListener('click', async () => {
       ellisWarmBtn.disabled = true;
-      await requestEllisWarm(current.entityId);
+      try {
+        await requestEllisWarm(current.entityId);
+        await renderInboard(current.entityId);
+        await renderNoteCount(current.entityId);
+      } catch {}
       ellisWarmBtn.disabled = false;
-      await renderInboard(current.entityId);
-      await renderNoteCount(current.entityId);
     });
   }
 

@@ -59,15 +59,17 @@ async function accrueTokens(env, entityId) {
     return ledger.balance;
   }
 
-  // Count current circle size
+  // Count real circle members (Ellis does not generate tokens — he's always there)
   const circleRow = await env.DB.prepare(
-    'SELECT COUNT(*) as c FROM trust_circle WHERE owner_id = ?'
-  ).bind(entityId).first();
-  const circleSize = circleRow?.c || 0;
+    'SELECT COUNT(*) as c FROM trust_circle WHERE owner_id = ? AND member_id != ?'
+  ).bind(entityId, ELLIS_ID).first();
+  const realCircleSize = circleRow?.c || 0;
 
-  // Tokens to add = min(circleSize, 5), capped so total doesn't exceed 5
-  const toAdd = Math.min(circleSize, 5);
-  const newBalance = Math.min((ledger.balance || 0) + toAdd, 5);
+  // Without real people: 1 whisper/day, max 1
+  // With real people: up to circleSize/day, max 5
+  const toAdd = realCircleSize === 0 ? 1 : Math.min(realCircleSize, 5);
+  const maxBalance = realCircleSize === 0 ? 1 : 5;
+  const newBalance = Math.min((ledger.balance || 0) + toAdd, maxBalance);
 
   await env.DB.prepare(`
     UPDATE token_ledger
@@ -142,7 +144,7 @@ export async function onRequest({ request, env }) {
     if (!entityId || !ghostName || !trustToken) return err('Missing fields');
     if (!/^[0-9a-f]{64}$/.test(entityId)) return err('Invalid entityId');
     if (!/^[0-9a-f]{16}$/.test(trustToken)) return err('Invalid trustToken');
-    await env.DB.prepare(`
+    const insertResult = await env.DB.prepare(`
       INSERT INTO entities (entity_id, ghost_name, trust_token)
       VALUES (?, ?, ?)
       ON CONFLICT(entity_id) DO NOTHING
@@ -151,12 +153,33 @@ export async function onRequest({ request, env }) {
       'SELECT * FROM entities WHERE entity_id = ?'
     ).bind(entityId).first();
 
-    // Auto-join Ellis into the new entity's circle (gives 1 token/day from day 1)
+    // Auto-join Ellis into the new entity's circle
     await env.DB.prepare(`
       INSERT INTO trust_circle (owner_id, member_id)
       VALUES (?, ?)
       ON CONFLICT(owner_id, member_id) DO NOTHING
     `).bind(entityId, ELLIS_ID).run();
+
+    // For new entities only: welcome whisper + 1 starter token
+    if (insertResult.meta.changes > 0) {
+      const welcomeId = uid();
+      await env.DB.prepare(`
+        INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish)
+        VALUES (?, ?, ?, 'Ellis', ?, '', '', '')
+      `).bind(welcomeId, entityId, ELLIS_ID,
+        "You've opened your quiet room. Whatever arrives here is yours to hold or release. Take your time."
+      ).run();
+      await env.DB.prepare(
+        'UPDATE entities SET note_count = 1 WHERE entity_id = ?'
+      ).bind(entityId).run();
+      // Give 1 starter token so they can send their first whisper immediately
+      const today = new Date().toISOString().slice(0, 10);
+      await env.DB.prepare(`
+        INSERT INTO token_ledger (entity_id, balance, accrued_date, circle_size_snapshot)
+        VALUES (?, 1, ?, 0)
+        ON CONFLICT(entity_id) DO NOTHING
+      `).bind(entityId, today).run();
+    }
 
     return json(remapEntity(row));
   }

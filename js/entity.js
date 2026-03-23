@@ -2,7 +2,8 @@
 
 // SHA-256 using Web Crypto API
 async function hashEmail(email) {
-  const normalised = email.trim().toLowerCase();
+  // Normalise: lowercase, trim, strip plus-addressing (user+tag@x → user@x)
+  const normalised = email.trim().toLowerCase().replace(/\+[^@]*(?=@)/, '');
   const encoder = new TextEncoder();
   const data = encoder.encode(normalised);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);

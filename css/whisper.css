@@ -184,7 +184,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 15, 15, 0.85);
+  background: rgba(24, 20, 13, 0.88);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   opacity: 0;
@@ -194,6 +194,7 @@ html {
 
 .anchor-overlay.visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .anchor-overlay.fading {
@@ -228,16 +229,16 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f0f0f;
+  background: #18140d;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
+  background: #2e2920;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+  background: #3e3830;
 }
 
 /* ── Selection colour ── */
@@ -249,8 +250,8 @@ html {
 /* ── Button base styles ── */
 .btn-ghost {
   background: transparent;
-  color: #6b6762;
-  border: 1px solid #2a2a2a;
+  color: #7e7870;
+  border: 1px solid #2e2920;
   padding: 0.4rem 1rem;
   border-radius: 999px;
   cursor: pointer;
@@ -261,8 +262,8 @@ html {
 }
 
 .btn-ghost:hover {
-  color: #e8e4dc;
-  border-color: #4a4a4a;
+  color: #ede8dc;
+  border-color: #4a4438;
 }
 
 .btn-sage {
@@ -284,8 +285,8 @@ html {
 
 .btn-muted {
   background: transparent;
-  color: #6b6762;
-  border: 1px solid #2a2a2a;
+  color: #7e7870;
+  border: 1px solid #2e2920;
   padding: 0.4rem 1rem;
   border-radius: 999px;
   cursor: pointer;
@@ -296,8 +297,8 @@ html {
 }
 
 .btn-muted:hover {
-  color: #e8e4dc;
-  border-color: #6b6762;
+  color: #ede8dc;
+  border-color: #7e7870;
 }
 
 /* ── Noise texture overlay for depth ── */
@@ -331,7 +332,7 @@ html {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #2a2a2a;
+  background: #2e2920;
   transition: background 0.3s ease;
 }
 
@@ -340,7 +341,7 @@ html {
 }
 
 .phase-dot.completed {
-  background: #4a4a4a;
+  background: #4a4438;
 }
 
 /* ── Ripple on reveal ── */
