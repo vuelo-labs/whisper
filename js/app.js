@@ -326,11 +326,12 @@ async function initDashboard() {
 
   // Broken session: token was wiped by a previous bug — prompt recovery
   if (!current.trustToken) {
+    document.body.style.background = '#F8F4ED';
     document.body.innerHTML = `
-      <div class="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6">
-        <p class="font-serif text-text text-xl italic">Your session needs refreshing.</p>
-        <p class="text-muted text-sm font-light max-w-xs leading-relaxed">Re-enter your email and your room will be restored.</p>
-        <a href="index.html" class="text-sage text-sm hover:underline">← Go back</a>
+      <div class="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6" style="background:#F8F4ED;">
+        <p style="font-family:'Playfair Display',serif; color:#2C2419; font-size:1.25rem; font-style:italic;">Your session needs refreshing.</p>
+        <p style="color:#8C7E6E; font-size:0.875rem; font-weight:300; max-width:22rem; line-height:1.6;">Re-enter your email and your room will be restored exactly as you left it.</p>
+        <a href="index.html" style="color:#8A9A5B; font-size:0.875rem;">← Re-enter email</a>
       </div>`;
     return;
   }
@@ -425,7 +426,10 @@ async function initDashboard() {
       const invite = await createInviteLink(current.entityId);
       trustBtn.disabled = false;
       trustBtn.textContent = 'Generate invite link';
-      if (!invite?.id) { showLinkFeedback(copyFeedback, null, 'Could not create link. Try re-entering your email to restore your session.'); return; }
+      if (!invite?.id) {
+        showLinkFeedback(copyFeedback, null, 'Session expired — <a href="index.html" style="text-decoration:underline;">re-enter your email</a> to restore access.');
+        return;
+      }
       const url = `${baseUrl}room.html?id=${current.entityId}&invite=${invite.id}`;
       showLinkFeedback(copyFeedback, url, 'Ready to hear what they see.');
     });
@@ -1417,7 +1421,7 @@ function showCopyFeedback(el, message) {
 function showLinkFeedback(el, url, message) {
   if (!el) return;
   if (!url) {
-    el.innerHTML = `<p class="text-muted/60 text-xs text-center font-light italic py-1">${escapeHtml(message)}</p>`;
+    el.innerHTML = `<p class="text-muted/60 text-xs text-center font-light italic py-1">${message}</p>`;
     el.classList.remove('hidden');
     setTimeout(() => el.classList.add('hidden'), 5000);
     return;
