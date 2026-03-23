@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whisper — The Mindfulness Gate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0f0f0f',
+            surface: '#1a1a1a',
+            text: '#e8e4dc',
+            muted: '#6b6762',
+            sage: '#8A9A5B',
+            rose: '#E5C1CD',
+            gold: '#C9A84C',
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="css/whisper.css" />
+  <style>
+    textarea {
+      resize: none;
+      field-sizing: content;
+      min-height: 100px;
+    }
+    .phase { transition: opacity 0.4s ease; }
+    .hold-btn-inner {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-bg text-text font-sans min-h-screen noise">
+
+  <!-- Ambient glow -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+    <div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] opacity-3"
+         style="background: radial-gradient(circle, #E5C1CD 0%, transparent 70%); transition: opacity 2s ease;"></div>
+  </div>
+
+  <div class="relative z-10 max-w-lg mx-auto px-6 py-10 compose-main">
+
+    <!-- Back link -->
+    <div class="mb-8">
+      <a id="back-to-room" href="#" class="text-muted/50 text-xs hover:text-muted transition-colors tracking-wide">← back to room</a>
+    </div>
+
+    <!-- Recipient header -->
+    <header class="mb-10 text-center">
+      <p class="text-muted text-xs uppercase tracking-widest mb-2">leaving a whisper for</p>
+      <h2 id="recipient-name" class="font-serif text-2xl text-text font-normal"></h2>
+    </header>
+
+    <!-- Trusted badge -->
+    <div id="trusted-badge" class="hidden text-center mb-6">
+      <span class="inline-block text-gold text-xs tracking-widest uppercase px-4 py-2 rounded-full"
+            style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);">
+        trusted messenger
+      </span>
+    </div>
+
+    <!-- Rate limit message -->
+    <div id="rate-limit-msg" class="hidden text-center py-16">
+      <div class="w-12 h-12 rounded-full mx-auto mb-6 breathe"
+           style="background: radial-gradient(circle, rgba(107,103,98,0.2) 0%, transparent 70%); border: 1px solid rgba(107,103,98,0.15);"></div>
+      <p class="font-serif text-xl text-text italic mb-3">You have spent your voice for this cycle.</p>
+      <p class="text-muted text-sm font-light">Return when the moon turns.</p>
+      <p class="text-muted/40 text-xs mt-6 font-light">Three whispers per 30 days keeps the space sacred.</p>
+    </div>
+
+    <!-- Liturgy container -->
+    <div id="liturgy-container">
+
+      <!-- Phase dots -->
+      <div id="phase-dots" class="flex justify-center gap-2 mb-10">
+        <div class="phase-dot active" id="dot-0"></div>
+        <div class="phase-dot" id="dot-1"></div>
+        <div class="phase-dot" id="dot-2"></div>
+        <div class="phase-dot" id="dot-3"></div>
+        <div class="phase-dot" id="dot-4"></div>
+      </div>
+
+      <!-- ── Phase: Admire ── -->
+      <div id="phase-admire" class="phase">
+        <div class="text-center mb-8">
+          <!-- Breathing timer circle -->
+          <div class="relative inline-flex items-center justify-center mb-6">
+            <div class="w-16 h-16 rounded-full breathe"
+                 style="background: rgba(138,154,91,0.08); border: 1px solid rgba(138,154,91,0.15);">
+            </div>
+            <svg class="hold-ring absolute" width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(138,154,91,0.25)" stroke-width="1.5"
+                      id="circle-admire" class="timer-circle"
+                      style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
+            </svg>
+            <span id="timer-admire" class="absolute text-sage text-xs font-light">60</span>
+          </div>
+
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step one of four — Admire</p>
+          <h3 class="font-serif text-xl text-text italic leading-snug">
+            What is a quiet strength this person has?
+          </h3>
+          <p class="text-muted text-xs mt-2 font-light">Something you've noticed. Something they might not see in themselves.</p>
+        </div>
+
+        <textarea
+          id="admire-textarea"
+          class="w-full bg-surface rounded-2xl px-5 py-4 text-text placeholder-muted font-serif text-base leading-relaxed border border-transparent focus:border-sage/20 focus:outline-none transition-all mb-4"
+          placeholder="A quiet strength I've noticed in you…"
+          rows="4"
+        ></textarea>
+
+        <div class="flex items-center justify-between">
+          <span class="text-muted/40 text-xs font-light">minimum 30 characters</span>
+          <button
+            id="admire-next"
+            disabled
+            class="px-6 py-2.5 rounded-full text-sm font-sans tracking-wide transition-all disabled:opacity-30"
+            style="background: rgba(138,154,91,0.1); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Phase: Appreciate ── -->
+      <div id="phase-appreciate" class="phase hidden">
+        <div class="text-center mb-8">
+          <div class="relative inline-flex items-center justify-center mb-6">
+            <div class="w-16 h-16 rounded-full breathe"
+                 style="background: rgba(229,193,205,0.06); border: 1px solid rgba(229,193,205,0.12);">
+            </div>
+            <svg class="hold-ring absolute" width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(229,193,205,0.2)" stroke-width="1.5"
+                      id="circle-appreciate" class="timer-circle"
+                      style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
+            </svg>
+            <span id="timer-appreciate" class="absolute text-xs font-light" style="color: #E5C1CD; opacity: 0.7;">60</span>
+          </div>
+
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step two of four — Appreciate</p>
+          <h3 class="font-serif text-xl text-text italic leading-snug">
+            What is a small way they've impacted your world?
+          </h3>
+          <p class="text-muted text-xs mt-2 font-light">A moment. A word they said. A space they held open.</p>
+        </div>
+
+        <textarea
+          id="appreciate-textarea"
+          class="w-full bg-surface rounded-2xl px-5 py-4 text-text placeholder-muted font-serif text-base leading-relaxed border border-transparent focus:border-rose/20 focus:outline-none transition-all mb-4"
+          placeholder="A moment where you changed something for me…"
+          rows="4"
+        ></textarea>
+
+        <div class="flex items-center justify-between">
+          <span class="text-muted/40 text-xs font-light">minimum 30 characters</span>
+          <button
+            id="appreciate-next"
+            disabled
+            class="px-6 py-2.5 rounded-full text-sm font-sans tracking-wide transition-all disabled:opacity-30"
+            style="background: rgba(229,193,205,0.08); color: #E5C1CD; border: 1px solid rgba(229,193,205,0.2);"
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Phase: Wish ── -->
+      <div id="phase-wish" class="phase hidden">
+        <div class="text-center mb-8">
+          <div class="relative inline-flex items-center justify-center mb-6">
+            <div class="w-16 h-16 rounded-full breathe"
+                 style="background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.12);">
+            </div>
+            <svg class="hold-ring absolute" width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(201,168,76,0.2)" stroke-width="1.5"
+                      id="circle-wish" class="timer-circle"
+                      style="stroke-dasharray: 175.93; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
+            </svg>
+            <span id="timer-wish" class="absolute text-xs font-light" style="color: #C9A84C; opacity: 0.7;">60</span>
+          </div>
+
+          <p class="text-muted text-xs uppercase tracking-widest mb-3">Step three of four — Wish</p>
+          <h3 class="font-serif text-xl text-text italic leading-snug">
+            What good fortune do you hope finds them soon?
+          </h3>
+          <p class="text-muted text-xs mt-2 font-light">Not advice. Just a quiet wish for their path ahead.</p>
+        </div>
+
+        <textarea
+          id="wish-textarea"
+          class="w-full bg-surface rounded-2xl px-5 py-4 text-text placeholder-muted font-serif text-base leading-relaxed border border-transparent focus:border-gold/20 focus:outline-none transition-all mb-4"
+          placeholder="I hope you find…"
+          rows="4"
+        ></textarea>
+
+        <div class="flex items-center justify-between">
+          <span class="text-muted/40 text-xs font-light">minimum 30 characters</span>
+          <button
+            id="wish-next"
+            disabled
+            class="px-6 py-2.5 rounded-full text-sm font-sans tracking-wide transition-all disabled:opacity-30"
+            style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);"
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Phase: Mirror ── -->
+      <div id="phase-mirror" class="phase hidden">
+        <div class="text-center mb-10">
+          <div class="w-16 h-16 rounded-full mx-auto mb-6"
+               style="background: radial-gradient(circle, rgba(107,103,98,0.15) 0%, transparent 70%); border: 1px solid rgba(107,103,98,0.2);">
+          </div>
+
+          <p class="text-muted text-xs uppercase tracking-widest mb-6">The final mirror</p>
+          <h3 class="font-serif text-2xl text-text leading-snug mb-8">
+            Are you leaving this to help them thrive,<br/>
+            <span class="italic text-muted">or to make yourself feel better?</span>
+          </h3>
+
+          <p class="text-muted text-sm font-light mb-8 leading-relaxed">
+            Sit with that for a moment.<br/>
+            When you're ready — and only when the answer is honest — type it below.
+          </p>
+        </div>
+
+        <div class="text-center">
+          <input
+            id="mirror-input"
+            type="text"
+            placeholder="type your answer…"
+            autocomplete="off"
+            class="w-full max-w-xs mx-auto block bg-surface rounded-2xl px-5 py-4 text-center text-text placeholder-muted font-serif text-base border border-transparent focus:border-muted/20 focus:outline-none transition-all mb-6"
+          />
+          <p class="text-muted/40 text-xs mb-6 font-light">type exactly: <em>to help them thrive</em></p>
+          <button
+            id="mirror-next"
+            disabled
+            class="px-8 py-3 rounded-full text-sm font-sans tracking-wide transition-all disabled:opacity-20"
+            style="background: rgba(138,154,91,0.08); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+          >
+            I'm ready to whisper
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Phase: Whisper ── -->
+      <div id="phase-whisper" class="phase hidden">
+        <div class="text-center mb-8">
+          <!-- Trusted: small timer -->
+          <div id="trusted-timer" class="relative inline-flex items-center justify-center mb-6">
+            <div class="w-12 h-12 rounded-full breathe-rose"
+                 style="background: rgba(229,193,205,0.06); border: 1px solid rgba(229,193,205,0.1);">
+            </div>
+            <svg class="hold-ring absolute" width="56" height="56" viewBox="0 0 56 56">
+              <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(229,193,205,0.15)" stroke-width="1"
+                      id="circle-whisper-trusted" class="timer-circle"
+                      style="stroke-dasharray: 138.23; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;"/>
+            </svg>
+            <span id="timer-whisper-trusted" class="absolute text-xs font-light" style="color: #E5C1CD; opacity: 0.5; font-size: 10px;">60</span>
+          </div>
+
+          <h3 class="font-serif text-xl text-text italic leading-snug mb-2">
+            The whisper itself.
+          </h3>
+          <p class="text-muted text-xs font-light">Speak quietly. They will hear it when they're ready.</p>
+        </div>
+
+        <div class="relative mb-2">
+          <textarea
+            id="whisper-textarea"
+            class="w-full bg-surface rounded-2xl px-5 py-4 text-text placeholder-muted font-serif text-base leading-relaxed border border-transparent focus:border-rose/15 focus:outline-none transition-all warm-glow"
+            maxlength="280"
+            rows="5"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-between mb-5">
+          <div class="space-y-1">
+            <p id="harm-warning" class="hidden text-rose/80 text-xs warn-pulse">
+              This space is for whispers, not shouts.
+            </p>
+            <p id="weight-warning" class="hidden text-gold/70 text-xs warn-pulse">
+              These words carry weight. Are you sure this serves them?
+            </p>
+            <p id="paste-warning" class="hidden text-muted text-xs warn-pulse">
+              Please take a moment. Type it, don't paste it.
+            </p>
+          </div>
+          <span id="char-count" class="text-muted/40 text-xs font-light">0 / 280</span>
+        </div>
+
+        <!-- Hold to exhale -->
+        <div class="text-center mt-8" id="hold-section">
+          <div class="relative inline-flex items-center justify-center mb-4">
+            <button
+              id="hold-btn"
+              disabled
+              class="hold-btn-inner relative w-24 h-24 rounded-full transition-all disabled:opacity-30"
+              style="background: rgba(229,193,205,0.06); border: 1px solid rgba(229,193,205,0.15); touch-action: none;"
+            >
+              <svg class="hold-ring absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" width="112" height="112" viewBox="0 0 112 112">
+                <circle cx="56" cy="56" r="48" fill="none" stroke="rgba(229,193,205,0.3)" stroke-width="1.5"
+                        id="hold-circle" class="timer-circle"/>
+              </svg>
+              <span id="hold-label" class="relative z-10 text-rose/70 text-xs font-light tracking-widest uppercase" style="font-size: 10px; letter-spacing: 0.12em;">hold to exhale</span>
+            </button>
+          </div>
+          <p class="text-muted/30 text-xs font-light">hold for 2.5 seconds to send</p>
+        </div>
+
+        <!-- Send choices (revealed after full hold) -->
+        <div id="send-choices" class="hidden mt-8 space-y-3">
+          <button
+            id="exhale-btn"
+            class="w-full py-4 rounded-2xl text-sm font-sans tracking-wide transition-all"
+            style="background: rgba(138,154,91,0.1); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+            onmouseover="this.style.background='rgba(138,154,91,0.18)'"
+            onmouseout="this.style.background='rgba(138,154,91,0.1)'"
+          >
+            Exhale to Board
+          </button>
+          <button
+            id="void-btn"
+            class="w-full py-3 rounded-2xl text-sm font-sans tracking-wide text-muted transition-all"
+            style="background: transparent; border: 1px solid #2a2a2a;"
+            onmouseover="this.style.borderColor='#4a4a4a'; this.style.color='#e8e4dc'"
+            onmouseout="this.style.borderColor='#2a2a2a'; this.style.color='#6b6762'"
+          >
+            Cast to Void
+          </button>
+          <p class="text-muted/30 text-center text-xs font-light mt-2">
+            Cast to Void — your words leave, but reach no one. Sometimes that's enough.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Final message (shown after sending) -->
+    <div id="final-message" class="hidden text-center py-20">
+      <div class="w-16 h-16 rounded-full mx-auto mb-8 breathe"
+           style="background: radial-gradient(circle, rgba(138,154,91,0.12) 0%, transparent 70%); border: 1px solid rgba(138,154,91,0.15);">
+      </div>
+      <h2 id="final-title" class="font-serif text-2xl text-text italic mb-4"></h2>
+      <p id="final-subtitle" class="text-muted text-sm font-light leading-relaxed"></p>
+      <a href="index.html" class="inline-block mt-10 text-muted/40 text-xs hover:text-muted/60 transition-colors font-light">
+        return to silence →
+      </a>
+    </div>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+  <script>
+    // Set back-to-room link dynamically
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      const trust = params.get('trust');
+      const backLink = document.getElementById('back-to-room');
+      if (backLink && id) {
+        let url = `room.html?id=${id}`;
+        if (trust) url += `&trust=${trust}`;
+        backLink.href = url;
+      }
+
+      // Hide phase dots in trusted mode
+      const trusted = trust && id;
+      if (trusted) {
+        const dots = document.getElementById('phase-dots');
+        if (dots) dots.classList.add('hidden');
+        // Also hide the trusted timer if not trusted
+      } else {
+        const trustedTimer = document.getElementById('trusted-timer');
+        if (trustedTimer) trustedTimer.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

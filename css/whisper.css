@@ -1,0 +1,364 @@
+/* whisper.css — Custom animations and effects for Whisper */
+
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap');
+
+/* ── Base reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Breathing circle — slow inhale/exhale pulse ── */
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(138, 154, 91, 0.15);
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+    box-shadow: 0 0 0 16px rgba(138, 154, 91, 0);
+  }
+}
+
+.breathe {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+.breathe-rose {
+  animation: breathe-rose 6s ease-in-out infinite;
+}
+
+@keyframes breathe-rose {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(229, 193, 205, 0.15);
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+    box-shadow: 0 0 0 16px rgba(229, 193, 205, 0);
+  }
+}
+
+/* ── Fog card ── */
+.fog-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.8s ease;
+}
+
+.fog-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.8s ease;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.fog-card .fog-content {
+  position: relative;
+  z-index: 2;
+  filter: blur(3px);
+  transition: filter 0.8s ease;
+  user-select: none;
+}
+
+.fog-card .revealed-content {
+  position: relative;
+  z-index: 2;
+}
+
+.fog-card.unveiled .fog-overlay {
+  opacity: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.fog-card.unveiled .fog-content {
+  filter: none;
+}
+
+/* ── Dissolve out ── */
+@keyframes dissolve {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.95);
+  }
+}
+
+.dissolving {
+  animation: dissolve 1.2s ease forwards;
+  pointer-events: none;
+}
+
+/* ── Warm glow background shift ── */
+.warm-glow {
+  transition: background-color 2s ease;
+}
+
+/* ── Hold button progress ring ── */
+.hold-ring-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hold-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+}
+
+.hold-ring circle {
+  transition: stroke-dashoffset 0.03s linear;
+}
+
+/* ── Fade in for whisper cards ── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.whisper-card {
+  animation: fadeIn 0.6s ease forwards;
+}
+
+/* ── Phase enter transition ── */
+@keyframes phaseEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.phase-enter {
+  animation: phaseEnter 0.5s ease forwards;
+}
+
+/* ── Anchor overlay — fixed centered, fades in and out ── */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.anchor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 15, 15, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.anchor-overlay.visible {
+  opacity: 1;
+}
+
+.anchor-overlay.fading {
+  opacity: 0;
+}
+
+/* ── Email input glow ── */
+.email-input-glow {
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.email-input-glow:focus {
+  box-shadow: 0 0 0 1px rgba(138, 154, 91, 0.4), 0 0 24px rgba(138, 154, 91, 0.12);
+  outline: none;
+}
+
+/* ── Trusted mode border ── */
+.trusted-mode {
+  border-color: rgba(201, 168, 76, 0.3) !important;
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.2), 0 0 32px rgba(201, 168, 76, 0.06);
+}
+
+/* ── Tab active state ── */
+.tab-active {
+  color: #e8e4dc !important;
+  border-bottom-color: #8A9A5B !important;
+}
+
+/* ── Subtle scrollbar ── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f0f0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* ── Selection colour ── */
+::selection {
+  background: rgba(138, 154, 91, 0.2);
+  color: #e8e4dc;
+}
+
+/* ── Button base styles ── */
+.btn-ghost {
+  background: transparent;
+  color: #6b6762;
+  border: 1px solid #2a2a2a;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-ghost:hover {
+  color: #e8e4dc;
+  border-color: #4a4a4a;
+}
+
+.btn-sage {
+  background: rgba(138, 154, 91, 0.12);
+  color: #8A9A5B;
+  border: 1px solid rgba(138, 154, 91, 0.25);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  transition: all 0.2s ease;
+}
+
+.btn-sage:hover {
+  background: rgba(138, 154, 91, 0.2);
+}
+
+.btn-muted {
+  background: transparent;
+  color: #6b6762;
+  border: 1px solid #2a2a2a;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  transition: all 0.2s ease;
+}
+
+.btn-muted:hover {
+  color: #e8e4dc;
+  border-color: #6b6762;
+}
+
+/* ── Noise texture overlay for depth ── */
+.noise {
+  position: relative;
+}
+
+.noise::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+}
+
+/* ── Timer circle ── */
+.timer-circle {
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+/* ── Sigil container ── */
+.sigil-container svg {
+  display: block;
+}
+
+/* ── Phase progress indicator dots ── */
+.phase-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  transition: background 0.3s ease;
+}
+
+.phase-dot.active {
+  background: #8A9A5B;
+}
+
+.phase-dot.completed {
+  background: #4a4a4a;
+}
+
+/* ── Ripple on reveal ── */
+@keyframes ripple {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.ripple {
+  animation: ripple 0.8s ease-out forwards;
+}
+
+/* ── Warning message pulse ── */
+@keyframes warnPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.warn-pulse {
+  animation: warnPulse 2s ease infinite;
+}

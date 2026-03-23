@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whisper — Your Quiet Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0f0f0f',
+            surface: '#1a1a1a',
+            text: '#e8e4dc',
+            muted: '#6b6762',
+            sage: '#8A9A5B',
+            rose: '#E5C1CD',
+            gold: '#C9A84C',
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="css/whisper.css" />
+</head>
+<body class="bg-bg text-text font-sans min-h-screen noise">
+
+  <!-- Ambient glow -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-4"
+         style="background: radial-gradient(ellipse, #8A9A5B 0%, transparent 70%);"></div>
+  </div>
+
+  <div class="relative z-10 max-w-2xl mx-auto px-6 py-10">
+
+    <!-- Header: Sigil + Ghost Name + Settings -->
+    <header class="mb-10">
+
+      <!-- Back / title row -->
+      <div class="flex items-center justify-between mb-8">
+        <a href="index.html" class="text-muted/50 text-xs hover:text-muted transition-colors tracking-wide">
+          ← leave
+        </a>
+        <span class="text-muted/30 text-xs tracking-widest uppercase">Your quiet room</span>
+        <div class="w-12"></div>
+      </div>
+
+      <!-- Identity -->
+      <div class="flex items-center gap-5 mb-6">
+        <div id="sigil-container" class="sigil-container w-20 h-20 flex items-center justify-center opacity-80"></div>
+        <div>
+          <h1 id="ghost-name" class="font-serif text-2xl text-text font-normal"></h1>
+          <p class="text-muted text-xs mt-1 font-light">your ghost name</p>
+        </div>
+      </div>
+
+      <!-- Board settings -->
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="flex items-center gap-3 bg-surface rounded-2xl px-4 py-2.5">
+          <label for="expiry-select" class="text-muted text-xs tracking-wide">link expires</label>
+          <select
+            id="expiry-select"
+            class="bg-transparent text-text text-sm font-sans border-none outline-none cursor-pointer"
+          >
+            <option value="1h">after 1 hour</option>
+            <option value="24h" selected>after 24 hours</option>
+            <option value="7d">after 7 days</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2 bg-surface rounded-2xl px-4 py-2.5">
+          <span class="text-muted text-xs tracking-wide">board</span>
+          <span id="note-count" class="text-text text-sm font-light">— / 100</span>
+        </div>
+      </div>
+
+    </header>
+
+    <!-- Share buttons -->
+    <div class="flex gap-3 flex-wrap mb-3">
+      <button
+        id="share-btn"
+        class="flex-1 min-w-[140px] py-3 rounded-2xl text-sm font-sans tracking-wide transition-all"
+        style="background: rgba(138,154,91,0.08); color: #8A9A5B; border: 1px solid rgba(138,154,91,0.2);"
+        onmouseover="this.style.background='rgba(138,154,91,0.16)'"
+        onmouseout="this.style.background='rgba(138,154,91,0.08)'"
+      >
+        Share my room
+      </button>
+      <button
+        id="trust-btn"
+        class="flex-1 min-w-[140px] py-3 rounded-2xl text-sm font-sans tracking-wide transition-all"
+        style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);"
+        onmouseover="this.style.background='rgba(201,168,76,0.16)'"
+        onmouseout="this.style.background='rgba(201,168,76,0.08)'"
+      >
+        Generate trust link
+      </button>
+    </div>
+
+    <!-- Copy feedback -->
+    <p id="copy-feedback" class="hidden text-muted text-xs text-center mb-4 font-light italic"></p>
+
+    <!-- Tabs -->
+    <div class="border-b border-surface mb-6">
+      <div class="flex gap-0">
+        <button
+          id="tab-inboard"
+          class="tab-active pb-3 px-1 mr-7 text-sm font-sans font-light tracking-wide border-b-2 border-transparent transition-all"
+          style="color: #e8e4dc; border-bottom-color: #8A9A5B;"
+        >
+          Inboard
+        </button>
+        <button
+          id="tab-outboard"
+          class="pb-3 px-1 text-sm font-sans font-light tracking-wide border-b-2 border-transparent text-muted transition-all hover:text-text"
+        >
+          Outboard
+        </button>
+      </div>
+    </div>
+
+    <!-- Inboard panel -->
+    <div id="panel-inboard">
+      <!-- Clear board -->
+      <div class="flex justify-end mb-4">
+        <button
+          id="clear-board-btn"
+          class="text-muted/50 text-xs hover:text-muted transition-colors tracking-wide"
+        >
+          clear the air ↑
+        </button>
+      </div>
+      <div id="inboard-container">
+        <!-- Rendered by app.js -->
+        <div class="text-center py-16 text-muted">
+          <p class="text-lg font-serif italic">Loading…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Outboard panel -->
+    <div id="panel-outboard" class="hidden">
+      <div class="mb-4">
+        <p class="text-muted text-xs font-light italic">
+          A private record of what you've released into other rooms.
+        </p>
+      </div>
+      <div id="outboard-container">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
