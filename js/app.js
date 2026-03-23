@@ -10,7 +10,7 @@ import {
   integrateWhisper, releaseWhisper, clearBoard,
   getIntegratedWhispers, isBoardFull,
   joinCircle, getCircleWidth, isCircleMember, getCirclesIn, getTokenBalance,
-  createInviteLink, useInviteLink,
+  useInviteLink,
   addCircleRequest, getCircleRequests, resolveCircleRequest,
 } from './db.js';
 
@@ -411,7 +411,6 @@ async function initDashboard() {
 
   // Share buttons
   const shareBtn = document.getElementById('share-btn');
-  const trustBtn = document.getElementById('trust-btn');
   const copyFeedback = document.getElementById('copy-feedback');
 
   const baseUrl = `${window.location.origin}/`;
@@ -419,23 +418,7 @@ async function initDashboard() {
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
       const url = `${baseUrl}room.html?id=${current.entityId}`;
-      showLinkFeedback(copyFeedback, url, 'Sharing this takes courage.');
-    });
-  }
-
-  if (trustBtn) {
-    trustBtn.addEventListener('click', async () => {
-      trustBtn.disabled = true;
-      trustBtn.textContent = 'Generating…';
-      const invite = await createInviteLink(current.entityId);
-      trustBtn.disabled = false;
-      trustBtn.textContent = 'Generate invite link';
-      if (!invite?.id) {
-        showLinkFeedback(copyFeedback, null, 'Session expired — <a href="index.html" style="text-decoration:underline;">re-enter your email</a> to restore access.');
-        return;
-      }
-      const url = `${baseUrl}room.html?id=${current.entityId}&invite=${invite.id}`;
-      showLinkFeedback(copyFeedback, url, 'Ready to hear what they see.');
+      showLinkFeedback(copyFeedback, url, 'Send this to someone you trust.');
     });
   }
 
