@@ -35,8 +35,8 @@
 
   <!-- Ambient glow -->
   <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[250px] opacity-4"
-         style="background: radial-gradient(ellipse, #E5C1CD 0%, transparent 70%);"></div>
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[250px]"
+         style="background: radial-gradient(ellipse, #E5C1CD 0%, transparent 70%); opacity: 0.02;"></div>
   </div>
 
   <div class="relative z-10 max-w-xl mx-auto px-6 py-10">
@@ -44,6 +44,15 @@
     <!-- Owner identity -->
     <header class="text-center mb-12">
       <div class="flex justify-center mb-4">
+        <!-- Photo avatar -->
+        <img
+          id="photo-avatar"
+          src=""
+          alt=""
+          class="hidden w-20 h-20 rounded-full object-cover"
+          style="border: 1px solid rgba(229,193,205,0.15);"
+        />
+        <!-- Sigil (shown if no photo) -->
         <div id="sigil-container" class="sigil-container opacity-80"></div>
       </div>
       <h1 id="ghost-name" class="font-serif text-2xl text-text font-normal mb-2"></h1>

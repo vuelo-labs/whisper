@@ -35,8 +35,8 @@
 
   <!-- Ambient glow -->
   <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-4"
-         style="background: radial-gradient(ellipse, #8A9A5B 0%, transparent 70%);"></div>
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px]"
+         style="background: radial-gradient(ellipse, #8A9A5B 0%, transparent 70%); opacity: 0.02;"></div>
   </div>
 
   <div class="relative z-10 max-w-2xl mx-auto px-6 py-10">
@@ -55,10 +55,19 @@
 
       <!-- Identity -->
       <div class="flex items-center gap-5 mb-6">
+        <!-- Photo avatar (shown if photo set) -->
+        <img
+          id="photo-avatar"
+          src=""
+          alt="Your photo"
+          class="hidden w-20 h-20 rounded-full object-cover"
+          style="border: 1px solid rgba(138,154,91,0.15);"
+        />
+        <!-- Sigil (shown if no photo) -->
         <div id="sigil-container" class="sigil-container w-20 h-20 flex items-center justify-center opacity-80"></div>
         <div>
-          <h1 id="ghost-name" class="font-serif text-2xl text-text font-normal"></h1>
-          <p class="text-muted text-xs mt-1 font-light">your ghost name</p>
+          <h1 id="display-name" class="font-serif text-2xl text-text font-normal"></h1>
+          <p id="ghost-name" class="text-muted text-xs mt-1 font-light"></p>
         </div>
       </div>
 

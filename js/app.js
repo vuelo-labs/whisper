@@ -3,7 +3,7 @@
 import { hashEmail, getGhostName, generateTrustToken, generateSigil } from './entity.js';
 import { scoreSentiment, containsHarm, isVelocityPaste } from './nlp.js';
 import {
-  createEntity, getEntity, updateEntity,
+  createEntity, setEntityProfile, getEntity, updateEntity,
   getCurrentEntity, setCurrentEntity,
   addWhisper, logOutbound,
   getInboard, getOutboard,
@@ -14,7 +14,8 @@ import {
 // Detect current page
 const page = (() => {
   const path = window.location.pathname;
-  if (path.endsWith('index.html') || path === '/' || path.endsWith('/whisper-app/')) return 'index';
+  if (path.endsWith('index.html') || path === '/' || path.endsWith('/whisper/')) return 'index';
+  if (path.endsWith('onboard.html')) return 'onboard';
   if (path.endsWith('dashboard.html')) return 'dashboard';
   if (path.endsWith('room.html')) return 'room';
   if (path.endsWith('compose.html')) return 'compose';
@@ -53,7 +54,8 @@ async function initIndex() {
       }
 
       setCurrentEntity({ entityId, ghostName, trustToken: entity.trustToken });
-      window.location.href = 'dashboard.html';
+      // New user: no display name yet → onboard first
+      window.location.href = entity.displayName ? 'dashboard.html' : 'onboard.html';
     } catch (err) {
       errEl.textContent = 'Something went quiet unexpectedly. Try again.';
       errEl.classList.remove('hidden');
@@ -61,6 +63,67 @@ async function initIndex() {
       btn.disabled = false;
     }
   });
+}
+
+// --- ONBOARD PAGE ---
+function initOnboard() {
+  const current = getCurrentEntity();
+  if (!current) { window.location.href = 'index.html'; return; }
+
+  const entity = getEntity(current.entityId);
+  if (!entity) { window.location.href = 'index.html'; return; }
+  if (entity.displayName) { window.location.href = 'dashboard.html'; return; }
+
+  const form = document.getElementById('onboard-form');
+  const nameInput = document.getElementById('name-input');
+  const photoInput = document.getElementById('photo-input');
+  const photoPreview = document.getElementById('photo-preview');
+  const photoPlaceholder = document.getElementById('photo-placeholder');
+  const submitBtn = document.getElementById('onboard-submit');
+  const sigilContainer = document.getElementById('onboard-sigil');
+
+  if (sigilContainer) sigilContainer.innerHTML = generateSigil(current.entityId, 48);
+
+  // Photo preview
+  if (photoInput) {
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const url = e.target.result;
+        if (photoPreview) {
+          photoPreview.src = url;
+          photoPreview.classList.remove('hidden');
+        }
+        if (photoPlaceholder) photoPlaceholder.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Name input → enable button
+  if (nameInput && submitBtn) {
+    nameInput.addEventListener('input', () => {
+      submitBtn.disabled = nameInput.value.trim().length < 1;
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const displayName = nameInput ? nameInput.value.trim() : '';
+      if (!displayName) return;
+
+      const photoUrl = (photoPreview && !photoPreview.classList.contains('hidden'))
+        ? photoPreview.src
+        : null;
+
+      setEntityProfile(current.entityId, { displayName, photoUrl });
+      setCurrentEntity({ ...current, displayName });
+      window.location.href = 'dashboard.html';
+    });
+  }
 }
 
 // --- DASHBOARD PAGE ---
@@ -77,11 +140,23 @@ function initDashboard() {
     return;
   }
 
-  // Render sigil and ghost name
+  // Render identity: photo or sigil, display name + ghost name
   const sigilContainer = document.getElementById('sigil-container');
   const ghostNameEl = document.getElementById('ghost-name');
-  if (sigilContainer) sigilContainer.innerHTML = generateSigil(current.entityId, 80);
-  if (ghostNameEl) ghostNameEl.textContent = current.ghostName || entity.ghostName;
+  const displayNameEl = document.getElementById('display-name');
+  const photoAvatarEl = document.getElementById('photo-avatar');
+
+  const displayName = entity.displayName || entity.ghostName;
+  if (displayNameEl) displayNameEl.textContent = displayName;
+  if (ghostNameEl) ghostNameEl.textContent = entity.ghostName;
+
+  if (entity.photoUrl && photoAvatarEl) {
+    photoAvatarEl.src = entity.photoUrl;
+    photoAvatarEl.classList.remove('hidden');
+    if (sigilContainer) sigilContainer.classList.add('hidden');
+  } else if (sigilContainer) {
+    sigilContainer.innerHTML = generateSigil(current.entityId, 80);
+  }
 
   // Expiry selector
   const expirySelect = document.getElementById('expiry-select');
@@ -312,11 +387,21 @@ function initRoom() {
     return;
   }
 
-  // Render sigil and ghost name
+  // Render identity
   const sigilContainer = document.getElementById('sigil-container');
-  const ghostNameEl = document.getElementById('ghost-name');
-  if (sigilContainer) sigilContainer.innerHTML = generateSigil(entityId, 72);
-  if (ghostNameEl) ghostNameEl.textContent = entity.ghostName;
+  const ownerNameEl = document.getElementById('ghost-name');
+  const photoAvatarEl = document.getElementById('photo-avatar');
+
+  const ownerName = entity.displayName || entity.ghostName;
+  if (ownerNameEl) ownerNameEl.textContent = ownerName;
+
+  if (entity.photoUrl && photoAvatarEl) {
+    photoAvatarEl.src = entity.photoUrl;
+    photoAvatarEl.classList.remove('hidden');
+    if (sigilContainer) sigilContainer.classList.add('hidden');
+  } else if (sigilContainer) {
+    sigilContainer.innerHTML = generateSigil(entityId, 72);
+  }
 
   // Board full check
   const full = isBoardFull(entityId);
@@ -373,9 +458,21 @@ function initCompose() {
     return;
   }
 
-  // Show recipient's ghost name
+  // Show recipient's name and photo
   const recipientNameEl = document.getElementById('recipient-name');
-  if (recipientNameEl) recipientNameEl.textContent = recipient.ghostName;
+  const recipientPhotoEl = document.getElementById('recipient-photo');
+  const recipientSigilEl = document.getElementById('recipient-sigil');
+
+  const recipientName = recipient.displayName || recipient.ghostName;
+  if (recipientNameEl) recipientNameEl.textContent = recipientName;
+
+  if (recipient.photoUrl && recipientPhotoEl) {
+    recipientPhotoEl.src = recipient.photoUrl;
+    recipientPhotoEl.classList.remove('hidden');
+    if (recipientSigilEl) recipientSigilEl.classList.add('hidden');
+  } else if (recipientSigilEl) {
+    recipientSigilEl.innerHTML = generateSigil(recipientId, 48);
+  }
 
   // Get or create sender entity
   let senderEntity = getCurrentEntity();
@@ -773,6 +870,7 @@ function formatDate(iso) {
 document.addEventListener('DOMContentLoaded', () => {
   switch (page) {
     case 'index':     initIndex();     break;
+    case 'onboard':   initOnboard();   break;
     case 'dashboard': initDashboard(); break;
     case 'room':      initRoom();      break;
     case 'compose':   initCompose();   break;

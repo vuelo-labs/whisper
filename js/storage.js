@@ -35,6 +35,8 @@ function createEntity({ entityId, ghostName, trustToken }) {
     entityId,
     ghostName,
     trustToken,
+    displayName: null,
+    photoUrl: null,
     expiry: '24h',
     noteCount: 0,
     createdAt: new Date().toISOString(),
@@ -42,6 +44,15 @@ function createEntity({ entityId, ghostName, trustToken }) {
   entities[entityId] = entity;
   writeJSON(KEYS.ENTITIES, entities);
   return entity;
+}
+
+function setEntityProfile(entityId, { displayName, photoUrl }) {
+  const entities = readJSON(KEYS.ENTITIES, {});
+  if (!entities[entityId]) return null;
+  if (displayName !== undefined) entities[entityId].displayName = displayName;
+  if (photoUrl !== undefined) entities[entityId].photoUrl = photoUrl;
+  writeJSON(KEYS.ENTITIES, entities);
+  return entities[entityId];
 }
 
 function getEntity(entityId) {
@@ -195,6 +206,7 @@ function isBoardFull(entityId) {
 export {
   KEYS,
   createEntity,
+  setEntityProfile,
   getEntity,
   updateEntity,
   getCurrentEntity,
