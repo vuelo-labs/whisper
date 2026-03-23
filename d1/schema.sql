@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS whispers (
   admire       TEXT,
   appreciate   TEXT,
   wish         TEXT,
+  from_circle  INTEGER NOT NULL DEFAULT 0,
   status       TEXT NOT NULL DEFAULT 'antechamber',
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );

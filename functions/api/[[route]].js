@@ -328,10 +328,14 @@ export async function onRequest({ request, env }) {
     if (!spent.meta.changes) return err('No tokens', 402);
 
     const id = uid();
+    const circleRow = await env.DB.prepare(
+      'SELECT 1 FROM trust_circle WHERE owner_id = ? AND member_id = ?'
+    ).bind(recipientId, senderId).first();
+    const fromCircle = circleRow ? 1 : 0;
     await env.DB.prepare(`
-      INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, recipientId, senderId, senderGhost, text, admire || null, appreciate || null, wish || null).run();
+      INSERT INTO whispers (id, recipient_id, sender_id, sender_ghost, text, admire, appreciate, wish, from_circle)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, recipientId, senderId, senderGhost, text, admire || null, appreciate || null, wish || null, fromCircle).run();
     await env.DB.prepare(
       'UPDATE entities SET note_count = note_count + 1 WHERE entity_id = ?'
     ).bind(recipientId).run();
@@ -633,6 +637,7 @@ function remapWhisper(r) {
     admire:      r.admire      || '',
     appreciate:  r.appreciate  || '',
     wish:        r.wish        || '',
+    fromCircle:  r.from_circle === 1,
     status:      r.status,
     createdAt:   r.created_at,
   };

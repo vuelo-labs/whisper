@@ -592,27 +592,34 @@ async function renderInboard(entityId) {
     </div>`;
   }
 
-  // Antechamber — always visible so people know it exists
+  // Antechamber — circle whispers first, then outside; always visible
+  const antechamberSorted = [
+    ...antechamber.filter(w => w.fromCircle),
+    ...antechamber.filter(w => !w.fromCircle),
+  ];
   html += `<div class="mb-8">
     <h3 class="text-xs uppercase tracking-widest text-muted mb-1">Antechamber${antechamber.length > 0 ? ` — ${antechamber.length} waiting` : ''}</h3>
     <p class="text-muted/40 text-xs font-light mb-4">whispers from others wait here until you're ready to open them</p>
     <div class="space-y-3">`;
-  if (antechamber.length === 0) {
+  if (antechamberSorted.length === 0) {
     html += `<p class="text-muted/30 text-sm font-serif italic py-4">Quiet for now. Share your room and whispers will arrive here.</p>`;
   } else {
-    antechamber.forEach(w => {
+    antechamberSorted.forEach(w => {
       const drift = driftTime(w.createdAt, entityExpiry);
+      const provenanceDot = w.fromCircle
+        ? `<span title="from your circle" style="width:6px;height:6px;border-radius:50%;background:rgba(138,154,91,0.5);display:inline-block;margin-left:6px;flex-shrink:0;"></span>`
+        : `<span title="from outside your circle" style="width:6px;height:6px;border-radius:50%;background:rgba(201,168,76,0.4);display:inline-block;margin-left:6px;flex-shrink:0;"></span>`;
       html += `<div class="fog-card bg-surface rounded-2xl p-5 relative" id="whisper-${w.id}">
         <div class="fog-overlay absolute inset-0 rounded-2xl"></div>
         <div class="fog-content">
           <div class="flex items-center justify-between">
             <p class="font-serif text-text/40 italic text-base">A whisper waits in the quiet…</p>
-            <span class="text-xs text-muted/40 font-light ml-3 shrink-0">${drift}</span>
+            <span class="flex items-center text-xs text-muted/40 font-light ml-3 shrink-0">${drift}${provenanceDot}</span>
           </div>
         </div>
         <div class="revealed-content hidden">
           <p class="font-serif text-text text-base leading-relaxed">"${escapeHtml(w.text)}"</p>
-          <p class="text-xs text-muted mt-3">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}</p>
+          <p class="text-xs text-muted mt-3 flex items-center gap-1">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}${provenanceDot}</p>
         </div>
         <div class="mt-4 flex gap-3 items-center flex-wrap">
           <button class="unveil-btn btn-ghost text-sm" data-id="${w.id}">Open</button>
@@ -626,13 +633,20 @@ async function renderInboard(entityId) {
   html += `</div></div>`;
 
   if (integrated.length > 0) {
+    const integratedSorted = [
+      ...integrated.filter(w => w.fromCircle),
+      ...integrated.filter(w => !w.fromCircle),
+    ];
     html += `<div>
       <h3 class="text-xs uppercase tracking-widest text-muted mb-4">Carried — ${integrated.length}</h3>
       <div class="space-y-3">`;
-    integrated.forEach(w => {
+    integratedSorted.forEach(w => {
+      const provenanceDot = w.fromCircle
+        ? `<span title="from your circle" style="width:6px;height:6px;border-radius:50%;background:rgba(138,154,91,0.5);display:inline-block;margin-left:4px;flex-shrink:0;"></span>`
+        : `<span title="from outside your circle" style="width:6px;height:6px;border-radius:50%;background:rgba(201,168,76,0.4);display:inline-block;margin-left:4px;flex-shrink:0;"></span>`;
       html += `<div class="whisper-card bg-surface rounded-2xl p-5">
         <p class="font-serif text-text text-base leading-relaxed">"${escapeHtml(w.text)}"</p>
-        <p class="text-xs text-muted mt-3">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}</p>
+        <p class="text-xs text-muted mt-3 flex items-center gap-1">from ${escapeHtml(w.senderGhost)} · ${formatDate(w.createdAt)}${provenanceDot}</p>
       </div>`;
     });
     html += `</div></div>`;

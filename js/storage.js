@@ -110,7 +110,12 @@ function clearCurrentEntity() {
 
 // --- Whispers ---
 
-function addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish }) {
+function addWhisper({ recipientId, senderId, senderGhost, text, admire, appreciate, wish, fromCircle }) {
+  // Derive fromCircle from local circle membership if not provided
+  if (fromCircle === undefined) {
+    const circle = readJSON(KEYS.circle(recipientId), []);
+    fromCircle = circle.some(m => m.memberId === senderId || m === senderId);
+  }
   const whisper = {
     id: generateId(),
     recipientId,
@@ -120,6 +125,7 @@ function addWhisper({ recipientId, senderId, senderGhost, text, admire, apprecia
     admire: admire || '',
     appreciate: appreciate || '',
     wish: wish || '',
+    fromCircle: !!fromCircle,
     status: 'antechamber',
     createdAt: new Date().toISOString(),
   };
