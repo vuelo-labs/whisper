@@ -173,16 +173,15 @@ function releaseWhisper(recipientId, whisperId) {
 }
 
 function clearBoard(entityId) {
-  // Move all integrated/released to released, keep structure
   const inboard = readJSON(KEYS.inboard(entityId), []);
-  const cleared = inboard.map(w => w.status === 'integrated' ? { ...w, status: 'released' } : w);
+  const cleared = inboard.map(w =>
+    (w.status === 'antechamber' || w.status === 'integrated') ? { ...w, status: 'released' } : w
+  );
   writeJSON(KEYS.inboard(entityId), cleared);
 
-  // Reset note count
   const entities = readJSON(KEYS.ENTITIES, {});
   if (entities[entityId]) {
-    const activeCount = cleared.filter(w => w.status === 'antechamber').length;
-    entities[entityId].noteCount = activeCount;
+    entities[entityId].noteCount = 0;
     writeJSON(KEYS.ENTITIES, entities);
   }
 }

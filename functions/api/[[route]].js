@@ -248,15 +248,11 @@ export async function onRequest({ request, env }) {
     const recipientId = parts[1];
     if (!(await authorize(env, recipientId, request))) return err('Unauthorized', 401);
     await env.DB.prepare(
-      "UPDATE whispers SET status = 'released' WHERE recipient_id = ? AND status = 'integrated'"
+      "UPDATE whispers SET status = 'released' WHERE recipient_id = ? AND status IN ('antechamber','integrated')"
     ).bind(recipientId).run();
-    // Sync noteCount to remaining antechamber whispers only
-    const remaining = await env.DB.prepare(
-      "SELECT COUNT(*) as c FROM whispers WHERE recipient_id = ? AND status = 'antechamber'"
-    ).bind(recipientId).first();
     await env.DB.prepare(
-      'UPDATE entities SET note_count = ? WHERE entity_id = ?'
-    ).bind(remaining?.c || 0, recipientId).run();
+      'UPDATE entities SET note_count = 0 WHERE entity_id = ?'
+    ).bind(recipientId).run();
     return json({ ok: true });
   }
 

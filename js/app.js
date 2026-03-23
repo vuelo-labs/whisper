@@ -43,28 +43,24 @@ const ELLIS_PUSHES = [
   "What do you think I'm afraid to want?",
 ];
 
-function getEllisMessages(entityId) {
-  try { return JSON.parse(localStorage.getItem(`whisper_ellis_${entityId}`)) || []; } catch { return []; }
-}
+const ELLIS_WARMTH = [
+  "You carry more than people realise, and you do it quietly. That takes a kind of strength most people never develop.",
+  "There is something in the way you move through difficulty that tells a story about who you really are. It's a good story.",
+  "The people who matter most to you feel it — even when you think they can't see it.",
+  "You have rebuilt yourself more times than you give yourself credit for.",
+  "Your instincts about people are better than you let yourself believe.",
+  "The version of you that others talk about when you leave the room is kinder and more impressive than the one you see.",
+  "Some of the things you think make you difficult are the same things that make you worth knowing.",
+  "You are not as far behind as you feel right now. You are exactly where a person like you needs to be.",
+  "The care you put into small things says everything about the kind of person you are.",
+  "There is a warmth in you that draws people closer without you noticing it happening.",
+  "You underestimate how often your presence alone is the thing that steadies someone else.",
+  "Something you dismissed as ordinary about yourself is genuinely rare.",
+  "The fact that you keep going, even on the days it doesn't feel worth it, is not nothing. It's everything.",
+  "Your sensitivity is not a weakness. It is how you notice things other people walk past.",
+  "You have already done the hardest part of something important. You just haven't seen the result yet.",
+];
 
-function saveEllisMessages(entityId, messages) {
-  localStorage.setItem(`whisper_ellis_${entityId}`, JSON.stringify(messages));
-}
-
-function createEllisMessage(entityId, type) {
-  const pool = type === 'thing' ? ELLIS_THINGS : ELLIS_PUSHES;
-  const text = pool[Math.floor(Math.random() * pool.length)];
-  const messages = getEllisMessages(entityId);
-  const msg = { id: crypto.randomUUID(), type, text, createdAt: new Date().toISOString(), shared: false };
-  messages.unshift(msg);
-  saveEllisMessages(entityId, messages);
-  return msg;
-}
-
-function dismissEllisMessage(entityId, msgId) {
-  const messages = getEllisMessages(entityId).filter(m => m.id !== msgId);
-  saveEllisMessages(entityId, messages);
-}
 
 // Timer helpers
 function expiryToMs(expiry) {
@@ -500,17 +496,36 @@ async function initDashboard() {
 
   // Ellis buttons
   const ellisThingBtn = document.getElementById('ellis-thing-btn');
-  const ellisPushBtn = document.getElementById('ellis-push-btn');
+  const ellisPushBtn  = document.getElementById('ellis-push-btn');
+  const ellisWarmBtn  = document.getElementById('ellis-warm-btn');
+
   if (ellisThingBtn) {
-    ellisThingBtn.addEventListener('click', async () => {
-      createEllisMessage(current.entityId, 'thing');
-      await renderInboard(current.entityId);
+    ellisThingBtn.addEventListener('click', () => {
+      const pool = ELLIS_THINGS;
+      const text = pool[Math.floor(Math.random() * pool.length)];
+      showEllisPromptModal(text);
     });
   }
   if (ellisPushBtn) {
-    ellisPushBtn.addEventListener('click', async () => {
-      createEllisMessage(current.entityId, 'push');
+    ellisPushBtn.addEventListener('click', () => {
+      const pool = ELLIS_PUSHES;
+      const text = pool[Math.floor(Math.random() * pool.length)];
+      showEllisPromptModal(text);
+    });
+  }
+  if (ellisWarmBtn) {
+    ellisWarmBtn.addEventListener('click', async () => {
+      const text = ELLIS_WARMTH[Math.floor(Math.random() * ELLIS_WARMTH.length)];
+      // Post as a whisper from Ellis directly to your inboard
+      await addWhisper({
+        recipientId: current.entityId,
+        senderId: ELLIS_ID,
+        senderGhost: 'Ellis',
+        text,
+        admire: '', appreciate: '', wish: '',
+      });
       await renderInboard(current.entityId);
+      await renderNoteCount(current.entityId);
     });
   }
 
@@ -518,11 +533,9 @@ async function initDashboard() {
   const clearBtn = document.getElementById('clear-board-btn');
   if (clearBtn) {
     clearBtn.addEventListener('click', async () => {
-      if (confirm('Clear all integrated whispers from your board? They will be released.')) {
-        await clearBoard(current.entityId);
-        await renderInboard(current.entityId);
-        await renderNoteCount(current.entityId);
-      }
+      await clearBoard(current.entityId);
+      await renderInboard(current.entityId);
+      await renderNoteCount(current.entityId);
     });
   }
 
@@ -549,33 +562,14 @@ async function renderInboard(entityId) {
   const entityExpiry = entityData?.expiry || '24h';
   const antechamber = inboard.filter(w => w.status === 'antechamber');
   const integrated = inboard.filter(w => w.status === 'integrated');
-  const ellisMessages = getEllisMessages(entityId);
 
   let html = '';
 
-  if (antechamber.length === 0 && integrated.length === 0 && ellisMessages.length === 0) {
+  if (antechamber.length === 0 && integrated.length === 0) {
     html = `<div class="text-center py-16 text-muted">
       <p class="text-lg font-serif italic">Silence hangs here, waiting to be filled.</p>
       <p class="text-sm mt-2">Share your room and let the whispers find you.</p>
     </div>`;
-  }
-
-  // Ellis prompts — suggested questions to invite from others
-  if (ellisMessages.length > 0) {
-    html += `<div class="mb-8">
-      <h3 class="text-xs uppercase tracking-widest mb-4" style="color: rgba(201,168,76,0.5);">Ellis suggests asking</h3>
-      <div class="space-y-3">`;
-    ellisMessages.forEach(m => {
-      html += `<div class="rounded-2xl p-5" id="ellis-${m.id}" style="background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.08);">
-        <p class="font-serif text-text text-base leading-relaxed italic">"${escapeHtml(m.text)}"</p>
-        <p class="text-xs mt-2" style="color: rgba(201,168,76,0.45);">— Ellis</p>
-        <div class="mt-4 flex gap-3 items-center">
-          <button class="ellis-copy-btn text-xs tracking-wide transition-colors" style="color: rgba(201,168,76,0.8);" data-id="${m.id}" data-text="${escapeHtml(m.text)}">Copy to share</button>
-          <button class="ellis-dismiss-btn text-xs text-muted/50 hover:text-muted transition-colors" data-id="${m.id}">Pass</button>
-        </div>
-      </div>`;
-    });
-    html += `</div></div>`;
   }
 
   if (antechamber.length > 0) {
@@ -634,23 +628,6 @@ async function renderInboard(entityId) {
     btn.addEventListener('click', () => handleRelease(btn.dataset.id, entityId));
   });
 
-  // Ellis buttons
-  container.querySelectorAll('.ellis-dismiss-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      dismissEllisMessage(entityId, btn.dataset.id);
-      await renderInboard(entityId);
-    });
-  });
-
-  container.querySelectorAll('.ellis-copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      copyToClipboard(btn.dataset.text, () => {
-        const orig = btn.textContent;
-        btn.textContent = 'Copied';
-        setTimeout(() => { btn.textContent = orig; }, 1800);
-      });
-    });
-  });
 }
 
 function handleUnveil(whisperId, entityId) {
@@ -1295,6 +1272,40 @@ async function initCompose() {
 }
 
 // --- UTILITIES ---
+
+function showEllisPromptModal(text) {
+  const modal = document.createElement('div');
+  modal.className = 'anchor-overlay';
+  modal.style.cssText = 'cursor: pointer;';
+  modal.innerHTML = `
+    <div class="max-w-sm w-full mx-6" style="background: #1a1a1a; border: 1px solid rgba(201,168,76,0.15); border-radius: 1.5rem; padding: 2rem;">
+      <p class="text-xs uppercase tracking-widest mb-4" style="color: rgba(201,168,76,0.5);">Ellis suggests asking</p>
+      <p class="font-serif text-text text-lg leading-relaxed italic mb-6">"${escapeHtml(text)}"</p>
+      <div class="flex gap-3">
+        <button class="ellis-modal-copy flex-1 py-2.5 rounded-xl text-sm font-sans tracking-wide transition-all" style="background: rgba(201,168,76,0.08); color: #C9A84C; border: 1px solid rgba(201,168,76,0.2);">Copy to share</button>
+        <button class="ellis-modal-close px-4 py-2.5 rounded-xl text-sm font-sans text-muted transition-all" style="border: 1px solid rgba(107,103,98,0.2);">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  requestAnimationFrame(() => modal.classList.add('visible'));
+
+  function dismiss() {
+    modal.classList.remove('visible');
+    modal.classList.add('fading');
+    setTimeout(() => modal.remove(), 600);
+  }
+
+  modal.querySelector('.ellis-modal-copy').addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyToClipboard(text, () => {
+      const btn = modal.querySelector('.ellis-modal-copy');
+      btn.textContent = 'Copied';
+      setTimeout(dismiss, 1000);
+    });
+  });
+  modal.querySelector('.ellis-modal-close').addEventListener('click', dismiss);
+  modal.addEventListener('click', (e) => { if (e.target === modal) dismiss(); });
+}
 
 function showAnchorOverlay(message, callback) {
   const overlay = document.createElement('div');
