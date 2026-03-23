@@ -129,15 +129,19 @@ async function initIndex() {
         entity = await createEntity({ entityId, ghostName, trustToken });
         setCurrentEntity({ entityId, ghostName, trustToken });
       } else {
-        // Returning user — preserve their stored token; never overwrite with undefined
-        const existing = getCurrentEntity();
-        const storedToken = (existing?.entityId === entityId) ? existing?.trustToken : null;
-        if (storedToken) {
-          setCurrentEntity({ entityId, ghostName, trustToken: storedToken });
-        } else {
-          // No stored token (cleared localStorage) — rekey to restore access
-          await rekeyEntity(entityId, trustToken);
+        // Returning user — always rekey to ensure token is fresh and matches server
+        const rekeyResult = await rekeyEntity(entityId, trustToken);
+        if (rekeyResult?.ok !== false) {
           setCurrentEntity({ entityId, ghostName, trustToken });
+        } else {
+          // Rate limited — fall back to stored token if available
+          const existing = getCurrentEntity();
+          const storedToken = (existing?.entityId === entityId) ? existing?.trustToken : null;
+          setCurrentEntity({ entityId, ghostName, trustToken: storedToken || trustToken });
+          if (!storedToken) {
+            errEl.textContent = 'Session refresh is temporarily limited. Please try again in a few hours.';
+            errEl.classList.remove('hidden');
+          }
         }
       }
       // New user: no display name yet → onboard first
@@ -1331,7 +1335,7 @@ function showEllisPromptModal(text) {
   modal.className = 'anchor-overlay';
   modal.style.cssText = 'cursor: pointer;';
   modal.innerHTML = `
-    <div class="max-w-sm w-full mx-6" style="background: #1a1a1a; border: 1px solid rgba(201,168,76,0.15); border-radius: 1.5rem; padding: 2rem;">
+    <div class="max-w-sm w-full mx-6" style="background: #EDE8DC; border: 1px solid rgba(201,168,76,0.25); border-radius: 1.5rem; padding: 2rem;">
       <p class="text-xs uppercase tracking-widest mb-4" style="color: rgba(201,168,76,0.5);">Ellis suggests asking</p>
       <p class="font-serif text-text text-lg leading-relaxed italic mb-6">"${escapeHtml(text)}"</p>
       <div class="flex gap-3">

@@ -189,9 +189,9 @@ export async function onRequest({ request, env }) {
     const entityId = parts[1];
     const { newToken } = body;
     if (!newToken || !/^[0-9a-f]{16}$/.test(newToken)) return err('Invalid token');
-    // 3 rekeys per entityId per day, 5 per IP per day — limits takeover window
-    if (await isRateLimited(env, entityId, 'rekey_entity', 3, 86400)) return err('Too many rekey requests', 429);
-    if (await isRateLimited(env, ip, 'rekey_ip', 5, 86400)) return err('Too many requests', 429);
+    // 20 rekeys per entityId per day, 30 per IP per day
+    if (await isRateLimited(env, entityId, 'rekey_entity', 20, 86400)) return err('Too many rekey requests', 429);
+    if (await isRateLimited(env, ip, 'rekey_ip', 30, 86400)) return err('Too many requests', 429);
     const row = await env.DB.prepare(
       'SELECT entity_id FROM entities WHERE entity_id = ?'
     ).bind(entityId).first();
